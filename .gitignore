@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+service-account-key.json
+*.pem
+*.key
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Runtime/cache
+*.pid
+*.pid.lock
+.tmp_parkrun_pkg/
+parkrun.js-*.tgz
+
+# Coverage / reports
+coverage/
+.nyc_output/
+
+# Optional local scratch scripts/output
+*.local.*

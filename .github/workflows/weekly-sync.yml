@@ -1,0 +1,63 @@
+name: Weekly Parkrun Sync
+
+on:
+  schedule:
+    # Every Monday at 05:00 UTC
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GOOGLE_CREDENTIALS_PATH: ./service-account-key.json
+
+      BIGQUERY_DATASET_ID: parkrun_data
+      BIGQUERY_RESULTS_TABLE: results
+      BIGQUERY_VOLUNTEERS_TABLE: volunteers
+      BIGQUERY_JUNIOR_RESULTS_TABLE: junior_results
+      BIGQUERY_JUNIOR_VOLUNTEERS_TABLE: junior_volunteers
+
+      PARKRUN_EVENT_ID: ${{ secrets.PARKRUN_EVENT_ID }}
+      PARKRUN_USERNAME: ${{ secrets.PARKRUN_USERNAME }}
+      PARKRUN_PASSWORD: ${{ secrets.PARKRUN_PASSWORD }}
+
+      JUNIOR_EVENT_ID: ${{ secrets.JUNIOR_EVENT_ID }}
+      JUNIOR_USERNAME: ${{ secrets.JUNIOR_USERNAME }}
+      JUNIOR_PASSWORD: ${{ secrets.JUNIOR_PASSWORD }}
+
+      # Latest-only sync behavior
+      RUN_JUNIOR: 'false'
+      FETCH_LATEST_ONLY: 'true'
+      TARGET_EVENT_NUMBER: ''
+      SCRAPE_ALL_EVENTS: 'false'
+      SCRAPE_MAX_EVENTS: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write GCP service account key
+        run: |
+          cat > service-account-key.json <<'JSON'
+          ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          JSON
+          chmod 600 service-account-key.json
+
+      - name: Ensure BigQuery dataset/tables exist
+        run: npm run setup:bq
+
+      - name: Run parkrun sync
+        run: npm run dev

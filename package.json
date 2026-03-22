@@ -1,0 +1,21 @@
+{
+  "name": "tgf-parkrun-processor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js",
+    "setup:bq": "node create-bigquery-tables.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google-cloud/bigquery": "^8.1.1",
+    "dotenv": "^17.3.1",
+    "parkrun.js": "^2.0.1"
+  }
+}
