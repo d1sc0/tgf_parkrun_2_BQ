@@ -27,19 +27,44 @@ async function parkrunAuth(username, password) {
     grant_type: 'password',
   });
 
-  const res = await axios.post(`${PARKRUN_API_BASE}/user_auth.php`, body, {
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': PARKRUN_USER_AGENT,
-      'X-Powered-By': `parkrun.js/${PARKRUN_VERSION} (https://parkrun.js.org/)`,
-    },
-    auth: { username: PARKRUN_AUTH[0], password: PARKRUN_AUTH[1] },
-  });
+  const maxAttempts = 4;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const res = await axios.post(`${PARKRUN_API_BASE}/user_auth.php`, body, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': PARKRUN_USER_AGENT,
+          'X-Powered-By': `parkrun.js/${PARKRUN_VERSION} (https://parkrun.js.org/)`,
+        },
+        auth: { username: PARKRUN_AUTH[0], password: PARKRUN_AUTH[1] },
+      });
 
-  if (!res.data || !res.data.access_token) {
-    throw new Error('Authentication failed: no access_token in response');
+      if (!res.data || !res.data.access_token) {
+        throw new Error('Authentication failed: no access_token in response');
+      }
+      return res.data.access_token;
+    } catch (err) {
+      const status = err?.response?.status;
+      const retriable = status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+
+      if (attempt < maxAttempts && retriable) {
+        const waitMs = attempt * 5000;
+        console.warn(
+          `  Auth attempt ${attempt}/${maxAttempts} failed with HTTP ${status}. Retrying in ${Math.round(waitMs / 1000)}s...`,
+        );
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+        continue;
+      }
+
+      if (status === 403) {
+        throw new Error(
+          'Parkrun auth returned HTTP 403. Most common causes are invalid credentials/secret formatting or source IP blocking (common on shared CI runners).',
+        );
+      }
+
+      throw err;
+    }
   }
-  return res.data.access_token;
 }
 
 /**
