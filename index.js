@@ -140,7 +140,7 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function fetchRunIds(client, eventId) {
+async function fetchRunIds(client, eventId, { startRunId = null } = {}) {
   const limit = 100;
   let offset = 0;
   const runIds = [];
@@ -162,6 +162,10 @@ async function fetchRunIds(client, eventId) {
 
     if (runs.length < limit) break;
     offset += runs.length;
+  }
+
+  if (startRunId !== null) {
+    return runIds.filter(runId => runId >= startRunId);
   }
 
   return runIds;
@@ -249,6 +253,9 @@ async function fetchRowsByRunIds(
     }
 
     if (delayMs > 0 && i + 1 < runIds.length) {
+      console.log(
+        `  ${dataType}: applying inter-run pause of ${delayMs}ms (RUN_FETCH_DELAY_MS=${RUN_FETCH_DELAY_MS ?? 'unset'} => ${RUN_FETCH_DELAY_MS_INT}ms).`,
+      );
       await sleep(delayMs);
     }
   }
@@ -278,7 +285,13 @@ async function getEvent(client, eventId) {
 async function fetchEventResults(
   client,
   eventId,
-  { latestOnly, targetEventNumber, useRunScopedHistory, runFetchDelayMs },
+  {
+    latestOnly,
+    targetEventNumber,
+    useRunScopedHistory,
+    runFetchDelayMs,
+    startEventNumber,
+  },
 ) {
   if (targetEventNumber !== null) {
     const runRows = await multiGet(
@@ -306,7 +319,9 @@ async function fetchEventResults(
   }
 
   if (useRunScopedHistory) {
-    const runIds = await fetchRunIds(client, eventId);
+    const runIds = await fetchRunIds(client, eventId, {
+      startRunId: startEventNumber,
+    });
     console.log(
       `  Using run-scoped results fetch across ${runIds.length} runs for event ${eventId}.`,
     );
@@ -362,7 +377,13 @@ async function fetchEventResults(
 async function fetchEventVolunteers(
   client,
   eventId,
-  { latestOnly, targetEventNumber, useRunScopedHistory, runFetchDelayMs },
+  {
+    latestOnly,
+    targetEventNumber,
+    useRunScopedHistory,
+    runFetchDelayMs,
+    startEventNumber,
+  },
 ) {
   if (targetEventNumber !== null) {
     const runRows = await multiGet(
@@ -390,7 +411,9 @@ async function fetchEventVolunteers(
   }
 
   if (useRunScopedHistory) {
-    const runIds = await fetchRunIds(client, eventId);
+    const runIds = await fetchRunIds(client, eventId, {
+      startRunId: startEventNumber,
+    });
     console.log(
       `  Using run-scoped volunteers fetch across ${runIds.length} runs for event ${eventId}.`,
     );
@@ -477,6 +500,9 @@ async function fetchVolunteerRoleNameMapByRunIds(client, eventId, runIds) {
         }
 
         const waitMs = Math.max(RUN_FETCH_DELAY_MS_INT, 1000) * attempt;
+        console.warn(
+          `  rosters run ${runId}: applying retry pause of ${waitMs}ms (RUN_FETCH_DELAY_MS=${RUN_FETCH_DELAY_MS ?? 'unset'} => ${RUN_FETCH_DELAY_MS_INT}ms).`,
+        );
         await sleep(waitMs);
       }
     }
@@ -491,6 +517,9 @@ async function fetchVolunteerRoleNameMapByRunIds(client, eventId, runIds) {
     }
 
     if (RUN_FETCH_DELAY_MS_INT > 0 && i + 1 < uniqueRunIds.length) {
+      console.log(
+        `  rosters: applying inter-run pause of ${RUN_FETCH_DELAY_MS_INT}ms (RUN_FETCH_DELAY_MS=${RUN_FETCH_DELAY_MS ?? 'unset'} => ${RUN_FETCH_DELAY_MS_INT}ms).`,
+      );
       await sleep(RUN_FETCH_DELAY_MS_INT);
     }
   }
@@ -521,6 +550,7 @@ const {
   RUN_JUNIOR,
   FETCH_LATEST_ONLY,
   TARGET_EVENT_NUMBER,
+  START_EVENT_NUMBER,
   SCRAPE_ALL_EVENTS,
   SCRAPE_MAX_EVENTS,
   RUN_FETCH_DELAY_MS,
@@ -530,6 +560,9 @@ const SHOULD_RUN_JUNIOR = RUN_JUNIOR === 'true';
 const SHOULD_FETCH_LATEST_ONLY = FETCH_LATEST_ONLY === 'true';
 const TARGET_EVENT_NUMBER_INT = TARGET_EVENT_NUMBER
   ? parseInt(TARGET_EVENT_NUMBER, 10)
+  : null;
+const START_EVENT_NUMBER_INT = START_EVENT_NUMBER
+  ? parseInt(START_EVENT_NUMBER, 10)
   : null;
 const SCRAPE_ALL = SCRAPE_ALL_EVENTS === 'true';
 const MAX_EVENTS = SCRAPE_MAX_EVENTS ? parseInt(SCRAPE_MAX_EVENTS, 10) : null;
@@ -555,6 +588,14 @@ const RESULTS_SCHEMA = [
   { name: 'was_genuine_pb', type: 'BOOLEAN', mode: 'NULLABLE' },
   { name: 'was_first_run_at_event', type: 'BOOLEAN', mode: 'NULLABLE' },
   { name: 'is_unknown_athlete', type: 'BOOLEAN', mode: 'NULLABLE' },
+  { name: 'club_name', type: 'STRING', mode: 'NULLABLE' },
+  { name: 'home_run_name', type: 'STRING', mode: 'NULLABLE' },
+  { name: 'run_total', type: 'INTEGER', mode: 'NULLABLE' },
+  { name: 'vol_count', type: 'INTEGER', mode: 'NULLABLE' },
+  { name: 'parkrun_club_membership', type: 'INTEGER', mode: 'NULLABLE' },
+  { name: 'volunteer_club_membership', type: 'INTEGER', mode: 'NULLABLE' },
+  { name: 'junior_run_total', type: 'INTEGER', mode: 'NULLABLE' },
+  { name: 'junior_club_membership', type: 'INTEGER', mode: 'NULLABLE' },
   { name: 'series_id', type: 'INTEGER', mode: 'NULLABLE' },
   { name: 'updated', type: 'TIMESTAMP', mode: 'NULLABLE' },
 ];
@@ -647,9 +688,14 @@ async function ensureDatasetAndTables() {
 
   // Add athlete-profile columns to results tables.
   for (const col of [
-    { name: 'club_id', type: 'INTEGER', mode: 'NULLABLE' },
-    { name: 'home_run_id', type: 'INTEGER', mode: 'NULLABLE' },
-    { name: 'country_code', type: 'INTEGER', mode: 'NULLABLE' },
+    { name: 'club_name', type: 'STRING', mode: 'NULLABLE' },
+    { name: 'home_run_name', type: 'STRING', mode: 'NULLABLE' },
+    { name: 'run_total', type: 'INTEGER', mode: 'NULLABLE' },
+    { name: 'vol_count', type: 'INTEGER', mode: 'NULLABLE' },
+    { name: 'parkrun_club_membership', type: 'INTEGER', mode: 'NULLABLE' },
+    { name: 'volunteer_club_membership', type: 'INTEGER', mode: 'NULLABLE' },
+    { name: 'junior_run_total', type: 'INTEGER', mode: 'NULLABLE' },
+    { name: 'junior_club_membership', type: 'INTEGER', mode: 'NULLABLE' },
   ]) {
     await ensureColumnExists(BIGQUERY_RESULTS_TABLE, col);
     if (SHOULD_RUN_JUNIOR)
@@ -660,8 +706,6 @@ async function ensureDatasetAndTables() {
   for (const col of [
     { name: 'run_id', type: 'INTEGER', mode: 'NULLABLE' },
     { name: 'task_ids', type: 'STRING', mode: 'NULLABLE' },
-    { name: 'home_run_id', type: 'INTEGER', mode: 'NULLABLE' },
-    { name: 'country_code', type: 'INTEGER', mode: 'NULLABLE' },
   ]) {
     await ensureColumnExists(BIGQUERY_VOLUNTEERS_TABLE, col);
     if (SHOULD_RUN_JUNIOR)
@@ -767,6 +811,30 @@ async function getExistingKeysForEventDates(
 // Map raw API row → BigQuery row ──────────────────────────────────────────
 function mapResultRow(raw) {
   const athleteId = parseInt(raw.AthleteID, 10);
+  const runTotal =
+    raw.RunTotal != null && raw.RunTotal !== ''
+      ? parseInt(raw.RunTotal, 10)
+      : null;
+  const volCount =
+    raw.volcount != null && raw.volcount !== ''
+      ? parseInt(raw.volcount, 10)
+      : null;
+  const parkrunClubMembership =
+    raw.parkrunClubMembership != null && raw.parkrunClubMembership !== ''
+      ? parseInt(raw.parkrunClubMembership, 10)
+      : null;
+  const volunteerClubMembership =
+    raw.volunteerClubMembership != null && raw.volunteerClubMembership !== ''
+      ? parseInt(raw.volunteerClubMembership, 10)
+      : null;
+  const juniorRunTotal =
+    raw.JuniorRunTotal != null && raw.JuniorRunTotal !== ''
+      ? parseInt(raw.JuniorRunTotal, 10)
+      : null;
+  const juniorClubMembership =
+    raw.JuniorClubMembership != null && raw.JuniorClubMembership !== ''
+      ? parseInt(raw.JuniorClubMembership, 10)
+      : null;
 
   return {
     run_id: parseInt(raw.RunId, 10),
@@ -788,6 +856,20 @@ function mapResultRow(raw) {
     was_genuine_pb: parseBool(raw.GenuinePB),
     was_first_run_at_event: parseBool(raw.FirstTimer),
     is_unknown_athlete: athleteId === 2214,
+    club_name: raw.ClubName || null,
+    home_run_name: raw.HomeRunName || null,
+    run_total: Number.isFinite(runTotal) ? runTotal : null,
+    vol_count: Number.isFinite(volCount) ? volCount : null,
+    parkrun_club_membership: Number.isFinite(parkrunClubMembership)
+      ? parkrunClubMembership
+      : null,
+    volunteer_club_membership: Number.isFinite(volunteerClubMembership)
+      ? volunteerClubMembership
+      : null,
+    junior_run_total: Number.isFinite(juniorRunTotal) ? juniorRunTotal : null,
+    junior_club_membership: Number.isFinite(juniorClubMembership)
+      ? juniorClubMembership
+      : null,
     series_id: raw.SeriesID != null ? parseInt(raw.SeriesID, 10) : null,
     updated: raw.Updated || null,
   };
@@ -874,10 +956,17 @@ async function processRunScopedHistory({
   resultsTable,
   volunteersTable,
 }) {
-  const runIds = await fetchRunIds(client, eventId);
+  const runIds = await fetchRunIds(client, eventId, {
+    startRunId: START_EVENT_NUMBER_INT,
+  });
   console.log(
     `  Full-history mode: ${runIds.length} runs to process for event ${eventId}.`,
   );
+  if (START_EVENT_NUMBER_INT !== null) {
+    console.log(
+      `  Full-history start filter enabled: START_EVENT_NUMBER=${START_EVENT_NUMBER_INT}.`,
+    );
+  }
 
   const resultKeyFn = r =>
     `${r.event_number}-${r.event_date}-${r.athlete_id}-${r.run_id}-${r.finish_position ?? 'null'}`;
@@ -916,6 +1005,9 @@ async function processRunScopedHistory({
         const waitMs = Math.max(RUN_FETCH_DELAY_MS_INT, 1000) * attempt;
         console.warn(
           `    results run ${runId}: HTTP ${status} on attempt ${attempt}/5; retrying in ${Math.round(waitMs / 1000)}s...`,
+        );
+        console.warn(
+          `    results run ${runId}: applying retry pause of ${waitMs}ms (RUN_FETCH_DELAY_MS=${RUN_FETCH_DELAY_MS ?? 'unset'} => ${RUN_FETCH_DELAY_MS_INT}ms).`,
         );
         await sleep(waitMs);
       }
@@ -974,6 +1066,9 @@ async function processRunScopedHistory({
         console.warn(
           `    volunteers run ${runId}: HTTP ${status} on attempt ${attempt}/5; retrying in ${Math.round(waitMs / 1000)}s...`,
         );
+        console.warn(
+          `    volunteers run ${runId}: applying retry pause of ${waitMs}ms (RUN_FETCH_DELAY_MS=${RUN_FETCH_DELAY_MS ?? 'unset'} => ${RUN_FETCH_DELAY_MS_INT}ms).`,
+        );
         await sleep(waitMs);
       }
     }
@@ -1029,6 +1124,9 @@ async function processRunScopedHistory({
     }
 
     if (RUN_FETCH_DELAY_MS_INT > 0 && i + 1 < runIds.length) {
+      console.log(
+        `    full-history: applying inter-run pause of ${RUN_FETCH_DELAY_MS_INT}ms (RUN_FETCH_DELAY_MS=${RUN_FETCH_DELAY_MS ?? 'unset'} => ${RUN_FETCH_DELAY_MS_INT}ms).`,
+      );
       await sleep(RUN_FETCH_DELAY_MS_INT);
     }
   }
@@ -1078,6 +1176,7 @@ async function processEvent({
     targetEventNumber: TARGET_EVENT_NUMBER_INT,
     useRunScopedHistory,
     runFetchDelayMs: RUN_FETCH_DELAY_MS_INT,
+    startEventNumber: START_EVENT_NUMBER_INT,
   });
   console.log(`  Retrieved ${rawResults.length} total result rows from API.`);
 
@@ -1177,6 +1276,7 @@ async function processEvent({
     targetEventNumber: TARGET_EVENT_NUMBER_INT,
     useRunScopedHistory,
     runFetchDelayMs: RUN_FETCH_DELAY_MS_INT,
+    startEventNumber: START_EVENT_NUMBER_INT,
   });
   console.log(
     `  Retrieved ${rawVolunteers.length} total volunteer rows from API.`,
@@ -1342,6 +1442,9 @@ async function main() {
   console.log(
     `Mode: ${SCRAPE_ALL ? 'full scrape' : 'incremental'}${MAX_EVENTS ? `, max ${MAX_EVENTS} event dates` : ''}`,
   );
+  console.log(
+    `Run fetch pause: RUN_FETCH_DELAY_MS=${RUN_FETCH_DELAY_MS ?? 'unset'} (effective ${RUN_FETCH_DELAY_MS_INT}ms).`,
+  );
 
   if (SHOULD_FETCH_LATEST_ONLY) {
     console.log(
@@ -1351,6 +1454,11 @@ async function main() {
   if (TARGET_EVENT_NUMBER_INT !== null) {
     console.log(
       `API optimization: TARGET_EVENT_NUMBER=${TARGET_EVENT_NUMBER_INT} (specific RunId only).`,
+    );
+  }
+  if (START_EVENT_NUMBER_INT !== null) {
+    console.log(
+      `API optimization: START_EVENT_NUMBER=${START_EVENT_NUMBER_INT} (full run-scoped fetch starts at this RunId).`,
     );
   }
 

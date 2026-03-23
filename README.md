@@ -57,6 +57,7 @@ Runtime flags:
 - RUN_JUNIOR
 - FETCH_LATEST_ONLY
 - TARGET_EVENT_NUMBER
+- START_EVENT_NUMBER
 - SCRAPE_ALL_EVENTS
 - SCRAPE_MAX_EVENTS
 - RUN_FETCH_DELAY_MS
@@ -78,6 +79,11 @@ Runtime flags:
 - TARGET_EVENT_NUMBER=<RunId>
   - Fetches only one specific event instance (RunId), for example 232.
   - Uses direct run-scoped endpoints (`/v1/events/{eventId}/runs/{runId}/results` and `/v1/events/{eventId}/runs/{runId}/volunteers`) to avoid wide history pagination.
+
+- START_EVENT_NUMBER=<RunId>
+  - Full run mode starts at this RunId and skips older runs.
+  - Useful for resuming a backfill without reprocessing the earliest history.
+  - Applies only when run-scoped history is active (`SCRAPE_ALL_EVENTS=true`, `FETCH_LATEST_ONLY=false`, and `TARGET_EVENT_NUMBER` unset).
 
 - RUN_FETCH_DELAY_MS=250
   - Milliseconds delay between run-scoped requests during full-history mode.
@@ -103,6 +109,66 @@ npm run dev
 Run latest-only sync (local one-off):
 
 FETCH_LATEST_ONLY=true SCRAPE_MAX_EVENTS=1 RUN_JUNIOR=false npm run dev
+
+## BigQuery query pack
+
+Reusable BigQuery SQL files are available in:
+
+- [sql/bigquery](sql/bigquery)
+
+Includes:
+
+- row counts by `run_id` for all tables
+- total row count checks
+- athlete summaries for `results` and `junior_results`
+- volunteer role summaries for `volunteers` and `junior_volunteers`
+- duplicate detection queries
+- daily QA checks (latest-date rows, day-over-day deltas, null-rate checks, latest-run completeness)
+
+## On-demand full loader
+
+Use `get_all_data.js` when you want a separate full reload process that is independent of `npm run dev` flags.
+
+How `get_all_data.js` works:
+
+1. Authenticates to Parkrun API.
+2. Loads all results for the configured event via `/v1/events/{eventId}/results` pagination.
+3. Writes results to BigQuery page-by-page (does not wait for all pages in memory).
+4. Loads all volunteers for the configured event via `/v1/volunteers?eventNumber={eventId}` pagination.
+5. Writes volunteers to BigQuery page-by-page.
+6. Repeats for junior event only when `RUN_JUNIOR=true`.
+7. Uses retry logic for API errors, with a dedicated delay for HTTP 403.
+
+Write strategy:
+
+- Results are written first, then volunteers.
+- For each event, the script first attempts to delete all existing rows for that event number from the target table.
+- If delete is blocked by BigQuery streaming buffer, it falls back to key-based dedupe before insert.
+
+Run command:
+
+node get_all_data.js
+
+Useful environment variables for `get_all_data.js`:
+
+- `RUN_JUNIOR` (default `false`):
+  - `false` runs only main event tables.
+  - `true` runs main + junior tables.
+- `GET_ALL_PAGE_CONCURRENCY` (default `1`): number of API pages fetched in parallel.
+- `GET_ALL_START_OFFSET` (default `0`): resume/pickup offset for pagination; normalized to page size (100).
+- `GET_ALL_RETRY_403_MS` (default `100000`): wait time before retrying a request that returns HTTP 403.
+- `GET_ALL_PROGRESS_EVERY_PAGES` (default `10`): how often cumulative insert progress is logged.
+
+Example runs:
+
+- Main event only:
+  - `RUN_JUNIOR=false node get_all_data.js`
+- Main + junior:
+  - `RUN_JUNIOR=true node get_all_data.js`
+- Resume from offset 3500:
+  - `GET_ALL_START_OFFSET=3500 node get_all_data.js`
+- Increase throughput carefully:
+  - `GET_ALL_PAGE_CONCURRENCY=2 node get_all_data.js`
 
 ## GitHub Actions weekly schedule
 
