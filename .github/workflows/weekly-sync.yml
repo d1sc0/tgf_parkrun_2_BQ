@@ -21,6 +21,9 @@ jobs:
       BIGQUERY_JUNIOR_RESULTS_TABLE: junior_results
       BIGQUERY_JUNIOR_VOLUNTEERS_TABLE: junior_volunteers
 
+      PARKRUN_CLIENT_ID: ${{ secrets.PARKRUN_CLIENT_ID }}
+      PARKRUN_CLIENT_SECRET: ${{ secrets.PARKRUN_CLIENT_SECRET }}
+
       PARKRUN_EVENT_ID: ${{ secrets.PARKRUN_EVENT_ID }}
       PARKRUN_USERNAME: ${{ secrets.PARKRUN_USERNAME }}
       PARKRUN_PASSWORD: ${{ secrets.PARKRUN_PASSWORD }}
@@ -58,6 +61,8 @@ jobs:
           required=(
             GCP_PROJECT_ID
             GCP_SERVICE_ACCOUNT_KEY
+            PARKRUN_CLIENT_ID
+            PARKRUN_CLIENT_SECRET
             PARKRUN_EVENT_ID
             PARKRUN_USERNAME
             PARKRUN_PASSWORD

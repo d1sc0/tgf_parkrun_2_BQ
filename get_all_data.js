@@ -7,16 +7,14 @@ const { BigQuery } = require('@google-cloud/bigquery');
 
 // Parkrun API constants (from parkrun.js constants)
 const PARKRUN_API_BASE = 'https://api.parkrun.com';
-const PARKRUN_AUTH = [
-  'PARKRUN_CLIENT_ID_REDACTED',
-  'PARKRUN_CLIENT_SECRET_REDACTED',
-];
 const PARKRUN_USER_AGENT = 'parkrun/1.2.7 CFNetwork/1121.2.2 Darwin/19.3.0';
 const PARKRUN_VERSION = '2.0.1';
 
 const {
   GCP_PROJECT_ID,
   GOOGLE_CREDENTIALS_PATH,
+  PARKRUN_CLIENT_ID,
+  PARKRUN_CLIENT_SECRET,
   BIGQUERY_DATASET_ID = 'parkrun_data',
   BIGQUERY_RESULTS_TABLE = 'results',
   BIGQUERY_VOLUNTEERS_TABLE = 'volunteers',
@@ -151,7 +149,7 @@ async function parkrunAuth(username, password) {
           'User-Agent': PARKRUN_USER_AGENT,
           'X-Powered-By': `parkrun.js/${PARKRUN_VERSION} (https://parkrun.js.org/)`,
         },
-        auth: { username: PARKRUN_AUTH[0], password: PARKRUN_AUTH[1] },
+        auth: { username: PARKRUN_CLIENT_ID, password: PARKRUN_CLIENT_SECRET },
       });
 
       if (!res.data || !res.data.access_token) {

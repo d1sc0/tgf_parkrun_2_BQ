@@ -3,10 +3,8 @@ const axios = require('axios');
 const qs = require('querystring');
 
 const PARKRUN_API_BASE = 'https://api.parkrun.com';
-const PARKRUN_AUTH = [
-  'PARKRUN_CLIENT_ID_REDACTED',
-  'PARKRUN_CLIENT_SECRET_REDACTED',
-];
+const PARKRUN_CLIENT_ID = process.env.PARKRUN_CLIENT_ID;
+const PARKRUN_CLIENT_SECRET = process.env.PARKRUN_CLIENT_SECRET;
 const UA = 'parkrun/1.2.7 CFNetwork/1121.2.2 Darwin/19.3.0';
 
 async function main() {
@@ -21,7 +19,7 @@ async function main() {
       'Content-Type': 'application/x-www-form-urlencoded',
       'User-Agent': UA,
     },
-    auth: { username: PARKRUN_AUTH[0], password: PARKRUN_AUTH[1] },
+    auth: { username: PARKRUN_CLIENT_ID, password: PARKRUN_CLIENT_SECRET },
   });
   const token = authRes.data.access_token;
   const client = axios.create({

@@ -7,10 +7,8 @@ const path = require('path');
 
 // ─── Parkrun API constants (from parkrun.js src/constants.ts) ─────────────────
 const PARKRUN_API_BASE = 'https://api.parkrun.com';
-const PARKRUN_AUTH = [
-  'PARKRUN_CLIENT_ID_REDACTED',
-  'PARKRUN_CLIENT_SECRET_REDACTED',
-];
+const PARKRUN_CLIENT_ID = process.env.PARKRUN_CLIENT_ID;
+const PARKRUN_CLIENT_SECRET = process.env.PARKRUN_CLIENT_SECRET;
 const PARKRUN_USER_AGENT = 'parkrun/1.2.7 CFNetwork/1121.2.2 Darwin/19.3.0';
 const PARKRUN_VERSION = '2.0.1';
 
@@ -36,7 +34,7 @@ async function parkrunAuth(username, password) {
           'User-Agent': PARKRUN_USER_AGENT,
           'X-Powered-By': `parkrun.js/${PARKRUN_VERSION} (https://parkrun.js.org/)`,
         },
-        auth: { username: PARKRUN_AUTH[0], password: PARKRUN_AUTH[1] },
+        auth: { username: PARKRUN_CLIENT_ID, password: PARKRUN_CLIENT_SECRET },
       });
 
       if (!res.data || !res.data.access_token) {
