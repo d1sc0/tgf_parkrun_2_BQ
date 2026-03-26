@@ -18,22 +18,38 @@ Generated view names
 
 When you run npm run publish:views, each SQL file is published as a view using this mapping:
 
-- 01_results_rows_by_run_id.sql -> v_01_results_rows_by_run_id
-- 02_junior_results_rows_by_run_id.sql -> v_02_junior_results_rows_by_run_id
-- 03_volunteers_rows_by_run_id.sql -> v_03_volunteers_rows_by_run_id
-- 04_junior_volunteers_rows_by_run_id.sql -> v_04_junior_volunteers_rows_by_run_id
-- 05_total_rows_all_tables.sql -> v_05_total_rows_all_tables
-- 06_results_athlete_summary.sql -> v_06_results_athlete_summary
-- 07_junior_results_athlete_summary.sql -> v_07_junior_results_athlete_summary
-- 08_volunteers_athlete_roles_summary.sql -> v_08_volunteers_athlete_roles_summary
-- 09_junior_volunteers_athlete_roles_summary.sql -> v_09_junior_volunteers_athlete_roles_summary
-- 10_duplicate_rows_detailed.sql -> v_10_duplicate_rows_detailed
-- 11_duplicate_rows_summary.sql -> v_11_duplicate_rows_summary
-- 12_daily_qa_latest_date_rows.sql -> v_12_daily_qa_latest_date_rows
-- 13_daily_qa_day_over_day_deltas.sql -> v_13_daily_qa_day_over_day_deltas
-- 14_daily_qa_null_rates.sql -> v_14_daily_qa_null_rates
-- 15_daily_qa_latest_run_completeness.sql -> v_15_daily_qa_latest_run_completeness
-- 16_headline_stats.sql -> v_16_headline_stats
+- 01_results_rows_by_run_id.sql -> \_01_results_rows_by_run_id
+- 02_junior_results_rows_by_run_id.sql -> \_02_junior_results_rows_by_run_id
+- 03_volunteers_rows_by_run_id.sql -> \_03_volunteers_rows_by_run_id
+- 04_junior_volunteers_rows_by_run_id.sql -> \_04_junior_volunteers_rows_by_run_id
+- 05_total_rows_all_tables.sql -> \_05_total_rows_all_tables
+- 06_results_athlete_summary.sql -> \_06_results_athlete_summary
+- 07_junior_results_athlete_summary.sql -> \_07_junior_results_athlete_summary
+- 08_volunteers_athlete_roles_summary.sql -> \_08_volunteers_athlete_roles_summary
+- 09_junior_volunteers_athlete_roles_summary.sql -> \_09_junior_volunteers_athlete_roles_summary
+- 10_duplicate_rows_detailed.sql -> \_10_duplicate_rows_detailed
+- 11_duplicate_rows_summary.sql -> \_11_duplicate_rows_summary
+- 12_daily_qa_latest_date_rows.sql -> \_12_daily_qa_latest_date_rows
+- 13_daily_qa_day_over_day_deltas.sql -> \_13_daily_qa_day_over_day_deltas
+- 14_daily_qa_null_rates.sql -> \_14_daily_qa_null_rates
+- 15_daily_qa_latest_run_completeness.sql -> \_15_daily_qa_latest_run_completeness
+- 16_headline_stats.sql -> \_16_headline_stats
+- 17_missing_positions.sql -> \_17_missing_positions
+
+Current summary metrics additions:
+
+- 06/07 athlete summary views include:
+  - highest_parkrun_club_membership_number
+  - highest_volunteer_club_membership_number
+  - highest_run_total
+  - highest_volunteer_count
+  - genuine_pb_count
+
+- 08/09 volunteer athlete summary views include the same highest metrics and genuine_pb_count joined by athlete_id from results/junior_results.
+
+- 16 headline stats view includes:
+  - parkrun_pb_count, junior_pb_count
+  - parkrun_genuine_pb_count, junior_genuine_pb_count
 
 Recommended run order:
 

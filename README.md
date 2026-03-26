@@ -2,6 +2,11 @@
 
 Syncs Parkrun event results and historical volunteer data into BigQuery for analysis.
 
+Script layout:
+
+- Main sync entrypoint: `sync_parkrun.js`
+- Utility scripts live under `utilities/` (setup, view publishing, backfill, compare)
+
 ## Maintainer Reference
 
 - [docs/repo-operations-reference.md](docs/repo-operations-reference.md)
@@ -130,6 +135,25 @@ Includes:
 - daily QA checks (latest-date rows, day-over-day deltas, null-rate checks, latest-run completeness)
 - headline one-row stats query (`16_headline_stats.sql`)
 
+Athlete summary view notes:
+
+- `06_results_athlete_summary.sql` and `07_junior_results_athlete_summary.sql` now include:
+  - `highest_parkrun_club_membership_number`
+  - `highest_volunteer_club_membership_number`
+  - `highest_run_total`
+  - `highest_volunteer_count`
+  - `genuine_pb_count`
+
+Volunteer athlete summary view notes:
+
+- `08_volunteers_athlete_roles_summary.sql` and `09_junior_volunteers_athlete_roles_summary.sql` include the same highest observed profile metrics and `genuine_pb_count` joined by `athlete_id` from results tables.
+
+Headline stats notes:
+
+- `16_headline_stats.sql` now includes both classic PB and genuine PB totals:
+  - `parkrun_pb_count`, `junior_pb_count`
+  - `parkrun_genuine_pb_count`, `junior_genuine_pb_count`
+
 Publish all SQL files as BigQuery views:
 
 `npm run publish:views`
@@ -140,9 +164,9 @@ Optional override for destination dataset:
 
 ## On-demand full loader
 
-Use `get_all_data.js` when you want a separate full reload process that is independent of `npm run dev` flags.
+Use `sync_all_data.js` when you want a separate full reload process that is independent of `npm run dev` flags.
 
-How `get_all_data.js` works:
+How `sync_all_data.js` works:
 
 1. Authenticates to Parkrun API.
 2. Loads all results for the configured event via `/v1/events/{eventId}/results` pagination.
@@ -160,9 +184,9 @@ Write strategy:
 
 Run command:
 
-node get_all_data.js
+node sync_all_data.js
 
-Useful environment variables for `get_all_data.js`:
+Useful environment variables for `sync_all_data.js`:
 
 - `RUN_JUNIOR` (default `false`):
   - `false` runs only main event tables.
@@ -175,13 +199,20 @@ Useful environment variables for `get_all_data.js`:
 Example runs:
 
 - Main event only:
-  - `RUN_JUNIOR=false node get_all_data.js`
+  - `RUN_JUNIOR=false node sync_all_data.js`
 - Main + junior:
-  - `RUN_JUNIOR=true node get_all_data.js`
+  - `RUN_JUNIOR=true node sync_all_data.js`
 - Resume from offset 3500:
-  - `GET_ALL_START_OFFSET=3500 node get_all_data.js`
+  - `GET_ALL_START_OFFSET=3500 node sync_all_data.js`
 - Increase throughput carefully:
-  - `GET_ALL_PAGE_CONCURRENCY=2 node get_all_data.js`
+  - `GET_ALL_PAGE_CONCURRENCY=2 node sync_all_data.js`
+
+Direct utility script paths (if not using npm scripts):
+
+- `node utilities/create-bigquery-tables.js`
+- `node utilities/publish-bigquery-views.js`
+- `node utilities/backfill-missing.js --input missing.json`
+- `node utilities/compare-bq-vs-eventhistory.js --out utilities/compare-bq-output.json --text-out utilities/compare-bq-report.txt`
 
 ## GitHub Actions weekly schedule
 

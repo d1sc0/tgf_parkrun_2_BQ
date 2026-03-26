@@ -94,5 +94,5 @@ jobs:
       - name: Ensure BigQuery dataset/tables exist
         run: npm run setup:bq
 
-      - name: Run parkrun sync
+      - name: Run parkrun sync (sync_parkrun.js via npm run dev)
         run: npm run dev

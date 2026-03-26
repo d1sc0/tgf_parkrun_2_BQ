@@ -4,7 +4,7 @@
  * Fetches and inserts specific missing result positions into BigQuery.
  *
  * Usage:
- *   node backfill-missing.js --input missing.json
+ *   node utilities/backfill-missing.js --input missing.json
  *
  * Input file format (missing.json):
  *   [
@@ -12,7 +12,7 @@
  *     { "run_id": "228", "event_date": "2026-02-21", "missing_position": "223" }
  *   ]
  *
- * You can generate the input from the v_17_missing_positions BigQuery view.
+ * You can generate the input from the _17_missing_positions BigQuery view.
  */
 require('dotenv').config();
 
@@ -145,7 +145,7 @@ async function fetchAllPages(clientRef, url, { retryCount = 0 } = {}) {
   return rows;
 }
 
-// ─── Row mapping (mirrors get_all_data.js) ───────────────────────────────────
+// ─── Row mapping (mirrors sync_all_data.js) ──────────────────────────────────
 
 function parseBool(val) {
   if (val == null || val === '') return null;
@@ -222,7 +222,9 @@ async function main() {
   // Parse --input argument
   const inputIdx = process.argv.indexOf('--input');
   if (inputIdx === -1 || !process.argv[inputIdx + 1]) {
-    console.error('Usage: node backfill-missing.js --input <file.json>');
+    console.error(
+      'Usage: node utilities/backfill-missing.js --input <file.json>',
+    );
     console.error('');
     console.error('File format:');
     console.error(
@@ -334,6 +336,6 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error('backfill-missing.js failed:', err?.message || err);
+  console.error('utilities/backfill-missing.js failed:', err?.message || err);
   process.exit(1);
 });

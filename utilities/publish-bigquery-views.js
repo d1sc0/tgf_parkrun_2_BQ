@@ -12,7 +12,7 @@ const viewsDatasetId =
   process.env.BIGQUERY_VIEWS_DATASET_ID ||
   process.env.BIGQUERY_DATASET_ID ||
   'parkrun_data';
-const sqlDir = path.resolve(__dirname, 'sql', 'bigquery');
+const sqlDir = path.resolve(__dirname, '..', 'sql', 'bigquery');
 
 function toViewId(filename) {
   const base = path.basename(filename, '.sql').toLowerCase();

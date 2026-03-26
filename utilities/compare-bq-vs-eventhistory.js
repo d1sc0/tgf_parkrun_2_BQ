@@ -444,8 +444,8 @@ async function main() {
     args['junior-results-table'] || BIGQUERY_JUNIOR_RESULTS_TABLE;
   const juniorVolunteersTable =
     args['junior-volunteers-table'] || BIGQUERY_JUNIOR_VOLUNTEERS_TABLE;
-  const outputPath = args.out || null;
-  const textOutputPath = args['text-out'] || 'compare-bq-report.txt';
+  const outputPath = args.out || 'utilities/compare-bq-output.json';
+  const textOutputPath = args['text-out'] || 'utilities/compare-bq-report.txt';
   const includeJunior = String(args['include-junior'] || 'true') !== 'false';
 
   if (!eventId)
@@ -512,11 +512,9 @@ async function main() {
   fs.writeFileSync(resolvedTextPath, textReport, 'utf8');
   console.log(`Wrote text report to ${resolvedTextPath}`);
 
-  if (outputPath) {
-    const resolved = path.resolve(outputPath);
-    fs.writeFileSync(resolved, JSON.stringify(summary, null, 2));
-    console.log(`Wrote comparison output to ${resolved}`);
-  }
+  const resolved = path.resolve(outputPath);
+  fs.writeFileSync(resolved, JSON.stringify(summary, null, 2));
+  console.log(`Wrote comparison output to ${resolved}`);
 }
 
 main().catch(err => {

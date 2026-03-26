@@ -673,7 +673,7 @@ async function processEvent({
 }
 
 async function main() {
-  console.log('Starting get_all_data.js...');
+  console.log('Starting sync_all_data.js...');
   console.log(`RUN_JUNIOR=${RUN_JUNIOR}`);
   console.log(`GET_ALL_PAGE_CONCURRENCY=${PAGE_CONCURRENCY}`);
   console.log(`GET_ALL_START_OFFSET=${START_OFFSET}`);
@@ -709,7 +709,7 @@ main().catch(err => {
   const status = err?.response?.status;
   const payload = err?.response?.data || err?.message || err;
   console.error(
-    `get_all_data.js failed${status ? ` (HTTP ${status})` : ''}:`,
+    `sync_all_data.js failed${status ? ` (HTTP ${status})` : ''}:`,
     payload,
   );
   process.exit(1);

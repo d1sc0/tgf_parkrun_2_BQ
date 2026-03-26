@@ -11,19 +11,19 @@ Purpose: practical non-sensitive reference for maintainers and automation agents
 
 ## Top-Level File Map
 
-- index.js
+- sync_parkrun.js
   - Main sync runner (incremental/latest and run-scoped modes).
   - Writes main and optionally junior tables.
-- get_all_data.js
+- sync_all_data.js
   - Full loader for historical pulls with pagination and insert progress logging.
-- backfill-missing.js
+- utilities/backfill-missing.js
   - Targeted backfill for specific run_id + missing_position records.
-- compare-bq-vs-eventhistory.js
+- utilities/compare-bq-vs-eventhistory.js
   - Compares BigQuery counts vs Parkrun event runs API.
   - Outputs JSON and text reports.
-- publish-bigquery-views.js
+- utilities/publish-bigquery-views.js
   - Publishes SQL files in sql/bigquery as BigQuery views.
-- create-bigquery-tables.js
+- utilities/create-bigquery-tables.js
   - Creates/ensures BigQuery tables used by the pipeline.
 - sql/bigquery/\*.sql
   - QA, summary, duplicate detection, and reporting views.
@@ -59,15 +59,30 @@ Source folder:
 
 View naming:
 
-- publish-bigquery-views.js converts SQL filenames into view ids.
+- utilities/publish-bigquery-views.js converts SQL filenames into view ids.
 - Current prefix behavior supports underscore-prefixed numeric names (for example _01_...).
 
 Notable SQL files:
 
 - 01_results_rows_by_run_id.sql
   - Includes row_count and volunteer_row_count by run_id.
+- 06_results_athlete_summary.sql
+  - Includes latest profile fields, fastest_time, appearances, and highest observed profile metrics:
+    - highest_parkrun_club_membership_number
+    - highest_volunteer_club_membership_number
+    - highest_run_total
+    - highest_volunteer_count
+    - genuine_pb_count
+- 07_junior_results_athlete_summary.sql
+  - Junior equivalent of 06 with the same metric columns.
+- 08_volunteers_athlete_roles_summary.sql
+  - Volunteer roles summary plus joined highest profile metrics and genuine_pb_count from results.
+- 09_junior_volunteers_athlete_roles_summary.sql
+  - Junior volunteer equivalent of 08.
 - 16_headline_stats.sql
-  - Headline metrics including total finishers fields.
+  - Headline metrics including PB and genuine PB totals:
+    - parkrun_pb_count, junior_pb_count
+    - parkrun_genuine_pb_count, junior_genuine_pb_count
 - 17_missing_positions.sql
   - Detects missing finish positions in results.
 
@@ -94,11 +109,11 @@ Main event data:
 
 HTTP 403 handling (important):
 
-- backfill-missing.js:
+- utilities/backfill-missing.js:
   - Waits 100 seconds on 403 and re-authenticates before retry.
-- compare-bq-vs-eventhistory.js:
+- utilities/compare-bq-vs-eventhistory.js:
   - Waits 100 seconds on 403 for auth and runs fetches, then retries once.
-- get_all_data.js:
+- sync_all_data.js:
   - Uses configurable 403 retry wait via GET_ALL_RETRY_403_MS (default 100000 ms).
 
 Pagination approach:
@@ -114,8 +129,8 @@ Operational preference:
 
 Comparison script outputs:
 
-- JSON summary: compare-bq-output.json (or --out path)
-- Text report: compare-bq-report.txt (or --text-out path)
+- JSON summary: utilities/compare-bq-output.json (or --out path)
+- Text report: utilities/compare-bq-report.txt (or --text-out path)
 
 Text report sections:
 
@@ -130,11 +145,12 @@ Text report sections:
 - npm run publish:views
 - npm run dev
 - npm run backfill -- --input missing.json
-- npm run compare:bq -- --out compare-bq-output.json --text-out compare-bq-report.txt
+- npm run compare:bq
 
 ## Ongoing Maintenance Notes
 
 - Prefer run-scoped backfills for isolated missing rows.
-- Re-run compare-bq-vs-eventhistory.js after data corrections.
+- Re-run utilities/compare-bq-vs-eventhistory.js after data corrections.
+- For scripted or agent-driven terminal runs, prefix commands with DISABLE_AUTO_UPDATE=true to prevent interactive oh-my-zsh update prompts.
 - Keep temporary probe/debug scripts out of long-term repo state.
 - Update this document when file responsibilities or endpoint usage changes.
