@@ -91,6 +91,116 @@ jobs:
           JSON
           chmod 600 service-account-key.json
 
+      - name: Validate service account key JSON and project alignment
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+
+          const path = 'service-account-key.json';
+          const projectId = process.env.GCP_PROJECT_ID;
+          let parsed;
+
+          try {
+            parsed = JSON.parse(fs.readFileSync(path, 'utf8'));
+          } catch (err) {
+            console.error('service-account-key.json is not valid JSON.');
+            process.exit(1);
+          }
+
+          const requiredFields = ['type', 'project_id', 'client_email', 'private_key'];
+          const missing = requiredFields.filter(k => !parsed[k]);
+          if (missing.length > 0) {
+            console.error(`Service account key JSON missing fields: ${missing.join(', ')}`);
+            process.exit(1);
+          }
+
+          if (parsed.type !== 'service_account') {
+            console.error(`Expected type=service_account but got: ${parsed.type}`);
+            process.exit(1);
+          }
+
+          if (projectId && parsed.project_id !== projectId) {
+            console.error(
+              `GCP_PROJECT_ID (${projectId}) does not match key project_id (${parsed.project_id}).`,
+            );
+            process.exit(1);
+          }
+
+          console.log('Service account key JSON looks valid and project IDs are aligned.');
+          NODE
+
+      - name: BigQuery auth preflight
+        run: |
+          node - <<'NODE'
+          const path = require('path');
+          const { BigQuery } = require('@google-cloud/bigquery');
+
+          const projectId = process.env.GCP_PROJECT_ID;
+          const keyFilename = path.resolve(process.env.GOOGLE_CREDENTIALS_PATH);
+          const datasetId = process.env.BIGQUERY_DATASET_ID || 'parkrun_data';
+
+          (async () => {
+            const bq = new BigQuery({ projectId, keyFilename });
+
+            // Fails if key is invalid or service account lacks BigQuery jobs permission.
+            await bq.query({ query: 'SELECT 1 AS ok', useLegacySql: false });
+
+            // Optional but useful early signal for dataset-level IAM issues.
+            const [exists] = await bq.dataset(datasetId).exists();
+            console.log(`BigQuery auth preflight passed (dataset ${datasetId} exists: ${exists}).`);
+          })().catch(err => {
+            const msg = err && err.message ? err.message : String(err);
+            console.error(`BigQuery auth preflight failed: ${msg}`);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Parkrun auth preflight
+        run: |
+          node - <<'NODE'
+          const axios = require('axios');
+          const qs = require('querystring');
+
+          const base = 'https://api.parkrun.com';
+          const body = qs.stringify({
+            username: process.env.PARKRUN_USERNAME,
+            password: process.env.PARKRUN_PASSWORD,
+            scope: 'app',
+            grant_type: 'password',
+          });
+
+          (async () => {
+            const res = await axios.post(`${base}/user_auth.php`, body, {
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'parkrun/1.2.7 CFNetwork/1121.2.2 Darwin/19.3.0',
+                'X-Powered-By': 'tgf-parkrun-processor-preflight',
+              },
+              auth: {
+                username: process.env.PARKRUN_CLIENT_ID,
+                password: process.env.PARKRUN_CLIENT_SECRET,
+              },
+              timeout: 30000,
+            });
+
+            if (!res.data || !res.data.access_token) {
+              throw new Error('No access_token returned by Parkrun auth endpoint.');
+            }
+
+            console.log('Parkrun auth preflight passed.');
+          })().catch(err => {
+            const status = err?.response?.status;
+            if (status === 403) {
+              console.error(
+                'Parkrun auth preflight failed with HTTP 403. Check PARKRUN_* secrets and consider possible CI runner IP blocking.',
+              );
+            } else {
+              console.error(`Parkrun auth preflight failed: ${err.message || err}`);
+            }
+            process.exit(1);
+          });
+          NODE
+
       - name: Ensure BigQuery dataset/tables exist
         run: npm run setup:bq
 

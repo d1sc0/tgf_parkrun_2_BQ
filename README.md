@@ -234,6 +234,8 @@ Current behavior in workflow:
 - GCP_SERVICE_ACCOUNT_KEY
   - Full JSON content of your service-account key file.
 - GCP_PROJECT_ID
+- PARKRUN_CLIENT_ID
+- PARKRUN_CLIENT_SECRET
 - PARKRUN_EVENT_ID
 - PARKRUN_USERNAME
 - PARKRUN_PASSWORD
