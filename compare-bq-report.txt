@@ -1,6 +1,6 @@
 # Parkrun vs BigQuery Count Comparison Report
 
-Generated: 2026-03-26T16:12:06.337Z
+Generated: 2026-03-26T16:20:12.356Z
 
 ## PARKRUN (event_id=2927)
 
@@ -11,10 +11,7 @@ Summary of missing events
 (none)
 
 Finishers count differences
-| run_id | bq_finishers | page_finishers |
-| --- | --- | --- |
-| 38 | 164 | 165 |
-| 24 | 240 | 241 |
+(none)
 
 Volunteers count differences
 | run_id | bq_volunteers | page_volunteers |

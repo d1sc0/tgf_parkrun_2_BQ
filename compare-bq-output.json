@@ -7,7 +7,7 @@
       "page_rows": 232,
       "missing_on_page_count": 0,
       "missing_in_bq_count": 0,
-      "diff_count": 16,
+      "diff_count": 14,
       "missing_on_page": [],
       "missing_in_bq": [],
       "diffs": [
@@ -54,13 +54,6 @@
           "page_volunteer_row_count": "32"
         },
         {
-          "run_id": "38",
-          "bq_row_count": "164",
-          "page_row_count": "165",
-          "bq_volunteer_row_count": "29",
-          "page_volunteer_row_count": "29"
-        },
-        {
           "run_id": "36",
           "bq_row_count": "139",
           "page_row_count": "139",
@@ -80,13 +73,6 @@
           "page_row_count": "205",
           "bq_volunteer_row_count": "28",
           "page_volunteer_row_count": "31"
-        },
-        {
-          "run_id": "24",
-          "bq_row_count": "240",
-          "page_row_count": "241",
-          "bq_volunteer_row_count": "42",
-          "page_volunteer_row_count": "42"
         },
         {
           "run_id": "23",
