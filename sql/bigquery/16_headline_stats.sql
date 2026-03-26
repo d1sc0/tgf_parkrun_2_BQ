@@ -120,26 +120,30 @@ weekly_aggs AS (
 )
 SELECT
   -- 1-2
+  p.records AS total_parkrun_finishers,
+  j.records AS total_junior_finishers,
+
+  -- 3-4
   p.total_events AS total_parkrun_events,
   j.total_events AS total_junior_events,
 
-  -- 3-4
+  -- 5-6
   p.records * 5.0 AS parkrun_total_distance_km,
   j.records * 2.0 AS junior_total_distance_km,
 
-  -- 5-6
+  -- 7-8
   ROUND(SAFE_DIVIDE(p.records * 5.0, 384400.0) * 100, 4) AS parkrun_pct_to_moon,
   ROUND(SAFE_DIVIDE(j.records * 2.0, 384400.0) * 100, 4) AS junior_pct_to_moon,
 
-  -- 7-8
+  -- 9-10
   a.unique_athletes,
   v.unique_volunteers,
 
-  -- 9-10
+  -- 11-12
   ROUND(w.avg_parkrun_finishers_per_week, 2) AS avg_parkrun_finishers_per_week,
   ROUND(w.avg_junior_finishers_per_week, 2) AS avg_junior_finishers_per_week,
 
-  -- 11 parkrun fastest/slowest/mean
+  -- 13 parkrun fastest/slowest/mean
   FORMAT('%02d:%02d:%02d',
     CAST(pt.fastest_seconds / 3600 AS INT64),
     CAST(MOD(pt.fastest_seconds, 3600) / 60 AS INT64),
@@ -156,7 +160,7 @@ SELECT
     CAST(MOD(CAST(ROUND(pt.mean_seconds) AS INT64), 60) AS INT64)
   ) AS parkrun_mean_time,
 
-  -- 12 junior fastest/slowest/mean
+  -- 14 junior fastest/slowest/mean
   FORMAT('%02d:%02d:%02d',
     CAST(jt.fastest_seconds / 3600 AS INT64),
     CAST(MOD(jt.fastest_seconds, 3600) / 60 AS INT64),
@@ -173,15 +177,15 @@ SELECT
     CAST(MOD(CAST(ROUND(jt.mean_seconds) AS INT64), 60) AS INT64)
   ) AS junior_mean_time,
 
-  -- 13-14 (sum of finish times divided by 24h)
+  -- 15-16 (sum of finish times divided by 24h)
   ROUND(SAFE_DIVIDE(pt.total_seconds, 86400.0), 2) AS parkrun_total_finish_time_days,
   ROUND(SAFE_DIVIDE(jt.total_seconds, 86400.0), 2) AS junior_total_finish_time_days,
 
-  -- 15-16
+  -- 17-18
   p.pb_count AS parkrun_pb_count,
   j.pb_count AS junior_pb_count,
 
-  -- 17-18
+  -- 19-20
   a.distinct_clubs,
   a.distinct_home_parkruns
 FROM parkrun_aggs p

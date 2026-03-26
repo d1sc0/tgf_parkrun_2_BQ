@@ -17,7 +17,7 @@ const sqlDir = path.resolve(__dirname, 'sql', 'bigquery');
 function toViewId(filename) {
   const base = path.basename(filename, '.sql').toLowerCase();
   const sanitized = base.replace(/[^a-z0-9_]/g, '_');
-  return /^[a-z_]/.test(sanitized) ? sanitized : `v_${sanitized}`;
+  return /^[a-z_]/.test(sanitized) ? sanitized : `_${sanitized}`;
 }
 
 async function ensureDataset(bigquery, datasetId) {
