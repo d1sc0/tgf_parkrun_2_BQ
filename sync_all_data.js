@@ -132,11 +132,26 @@ function mapVolunteerRoleIdsCsv(roleIds) {
   return roleIds.join(',');
 }
 
-function mapVolunteerRoleNames(roleIds, raw) {
-  const directName = raw.TaskName || raw.VolunteerRoleName || raw.VolunteerRole;
-  if (directName && String(directName).trim() !== '') {
-    return String(directName).trim();
+function firstNonEmptyString(values) {
+  for (const value of values) {
+    if (value == null) continue;
+    const normalized = String(value).trim();
+    if (normalized) return normalized;
   }
+  return '';
+}
+
+function mapVolunteerRoleNames(roleIds, raw) {
+  const directName = firstNonEmptyString([
+    raw?.TaskName,
+    raw?.taskName,
+    raw?.task_name,
+    raw?.VolunteerRoleName,
+    raw?.volunteerRoleName,
+    raw?.VolunteerRole,
+    raw?.volunteerRole,
+  ]);
+  if (directName) return directName;
 
   if (roleIds.length > 0) {
     return roleIds.map(id => `Role ${id}`).join(', ');

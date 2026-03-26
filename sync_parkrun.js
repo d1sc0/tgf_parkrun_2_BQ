@@ -507,8 +507,19 @@ async function fetchVolunteerRoleNameMapByRunIds(client, eventId, runIds) {
 
     const rows = rosterRows || [];
     for (const row of rows) {
-      const id = row?.taskid != null ? parseInt(row.taskid, 10) : null;
-      const name = row?.TaskName ? String(row.TaskName).trim() : '';
+      const rawId =
+        row?.taskid ?? row?.taskId ?? row?.TaskId ?? row?.TaskID ??
+        row?.roleId ?? row?.RoleId ?? row?.RoleID;
+      const id = rawId != null ? parseInt(rawId, 10) : null;
+      const name = firstNonEmptyString([
+        row?.TaskName,
+        row?.taskName,
+        row?.taskname,
+        row?.VolunteerRoleName,
+        row?.volunteerRoleName,
+        row?.VolunteerRole,
+        row?.volunteerRole,
+      ]);
       if (Number.isFinite(id) && name && !roleNameById.has(id)) {
         roleNameById.set(id, name);
       }
@@ -890,7 +901,29 @@ function parseVolunteerRoleIds(rawRoleIds) {
     .filter(n => Number.isFinite(n));
 }
 
-function mapVolunteerRoleNames(roleIds, roleNameById) {
+function firstNonEmptyString(values) {
+  for (const value of values) {
+    if (value == null) continue;
+    const normalized = String(value).trim();
+    if (normalized) return normalized;
+  }
+  return '';
+}
+
+function mapVolunteerRoleNames(roleIds, roleNameById, raw) {
+  // 1. Prefer a name returned directly on the raw volunteer row
+  const directName = firstNonEmptyString([
+    raw?.TaskName,
+    raw?.taskName,
+    raw?.task_name,
+    raw?.VolunteerRoleName,
+    raw?.volunteerRoleName,
+    raw?.VolunteerRole,
+    raw?.volunteerRole,
+  ]);
+  if (directName) return directName;
+
+  // 2. Fall back to run-scoped roster metadata lookup
   if (roleIds.length === 0) return 'No role recorded';
   const names = roleIds.map(id => roleNameById.get(id) || `Role ${id}`);
   return names.join(', ');
@@ -1097,7 +1130,7 @@ async function processRunScopedHistory({
           athlete_id: v.AthleteID != null ? parseInt(v.AthleteID, 10) : null,
           task_id: roleIds.length > 0 ? roleIds[0] : null,
           task_ids: mapVolunteerRoleIdsCsv(roleIds),
-          task_name: mapVolunteerRoleNames(roleIds, roleNameById),
+          task_name: mapVolunteerRoleNames(roleIds, roleNameById, v),
           first_name: v.FirstName || null,
           last_name: v.LastName || null,
         };
@@ -1364,7 +1397,7 @@ async function processEvent({
         athlete_id: v.AthleteID != null ? parseInt(v.AthleteID, 10) : null,
         task_id: roleIds.length > 0 ? roleIds[0] : null,
         task_ids: mapVolunteerRoleIdsCsv(roleIds),
-        task_name: mapVolunteerRoleNames(roleIds, roleNameById),
+        task_name: mapVolunteerRoleNames(roleIds, roleNameById, v),
         first_name: v.FirstName || null,
         last_name: v.LastName || null,
       };

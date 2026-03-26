@@ -30,7 +30,7 @@ Volunteer role fields:
 - run_id: run instance number from the API row
 - task_id: first volunteer role ID for the row
 - task_ids: comma-separated list of all volunteer role IDs for the row
-- task_name: comma-separated role names resolved from run-scoped roster metadata (`/v1/events/{eventId}/runs/{runId}/rosters`)
+- task_name: comma-separated role names resolved using a two-step approach: direct name fields on the volunteer API row are preferred (`TaskName`, `VolunteerRoleName`, `VolunteerRole` and lowercase variants); run-scoped roster metadata (`/v1/events/{eventId}/runs/{runId}/rosters`) is used as a fallback when no direct name is present
 
 ## BigQuery tables
 
@@ -212,7 +212,31 @@ Direct utility script paths (if not using npm scripts):
 - `node utilities/create-bigquery-tables.js`
 - `node utilities/publish-bigquery-views.js`
 - `node utilities/backfill-missing.js --input missing.json`
+- `node utilities/reload-volunteer-history.js --dry-run`
 - `node utilities/compare-bq-vs-eventhistory.js --out utilities/compare-bq-output.json --text-out utilities/compare-bq-report.txt`
+
+## Volunteer history reload
+
+Use `utilities/reload-volunteer-history.js` when the volunteer-role issue is broad enough that a full historical reload is safer than targeting only affected runs.
+
+What it does:
+
+1. Authenticates once and reads the full historical volunteers feed via `/v1/volunteers?eventNumber={eventId}`.
+2. Rebuilds `task_name` for every row, preferring role names present directly on volunteer rows.
+3. Uses run-scoped roster metadata only for rows that still have no direct role name.
+4. In non-dry-run mode, deletes the current event's volunteer rows from BigQuery and repopulates them.
+5. Emits an optional JSON report with unresolved historic role IDs still returned by the API.
+
+Examples:
+
+- Dry-run the full main-event reload:
+  - `npm run reload:volunteer-history -- --dry-run --report utilities/reload-volunteer-history-report.json`
+- Dry-run a small sample first:
+  - `npm run reload:volunteer-history -- --dry-run --max-pages 5`
+- Run the full write-enabled reload:
+  - `npm run reload:volunteer-history -- --report utilities/reload-volunteer-history-report.json`
+- Run against junior data:
+  - `npm run reload:volunteer-history -- --junior --dry-run`
 
 ## GitHub Actions weekly schedule
 
