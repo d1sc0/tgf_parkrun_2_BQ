@@ -454,13 +454,19 @@ async function getExistingKeysForEvent(tableId, eventNumber, keyExpr) {
 }
 
 function mapResultRow(raw) {
-  const athleteId = parseNullableInt(raw.AthleteID);
+  let athleteId = parseNullableInt(raw.AthleteID);
   const runTotal = parseNullableInt(raw.RunTotal);
   const volCount = parseNullableInt(raw.volcount);
   const parkrunClubMembership = parseNullableInt(raw.parkrunClubMembership);
   const volunteerClubMembership = parseNullableInt(raw.volunteerClubMembership);
   const juniorRunTotal = parseNullableInt(raw.JuniorRunTotal);
   const juniorClubMembership = parseNullableInt(raw.JuniorClubMembership);
+
+  // Treat null athleteId as unknown athlete (2214)
+  const isUnknown = athleteId === 2214 || athleteId == null;
+  if (athleteId == null) {
+    athleteId = 2214;
+  }
 
   return {
     run_id: parseNullableInt(raw.RunId),
@@ -478,7 +484,7 @@ function mapResultRow(raw) {
     was_pb: parseBool(raw.WasPbRun),
     was_genuine_pb: parseBool(raw.GenuinePB),
     was_first_run_at_event: parseBool(raw.FirstTimer),
-    is_unknown_athlete: athleteId === 2214,
+    is_unknown_athlete: isUnknown,
     club_name: raw.ClubName || null,
     home_run_name: raw.HomeRunName || null,
     run_total: Number.isFinite(runTotal) ? runTotal : null,
@@ -558,9 +564,7 @@ async function processEvent({
       onPage: async (rows, pageMeta) => {
         const mappedPageRows = rows
           .map(mapResultRow)
-          .filter(
-            r => r.run_id != null && r.athlete_id != null && r.event_date,
-          );
+          .filter(r => r.run_id != null && r.event_date);
 
         let pageToInsert = mappedPageRows;
         if (existingResultKeys) {
