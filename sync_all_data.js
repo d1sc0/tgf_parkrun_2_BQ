@@ -32,10 +32,15 @@ const {
   GET_ALL_START_OFFSET = '0',
   GET_ALL_RETRY_403_MS = '100000',
   GET_ALL_PROGRESS_EVERY_PAGES = '10',
+  RUN_FETCH_DELAY_MS = '0',
 } = process.env;
 
 const SHOULD_RUN_JUNIOR = RUN_JUNIOR === 'true';
 const SHOULD_RUN_VOLUNTEERS_ONLY = VOLUNTEERS_ONLY === 'true';
+const RUN_FETCH_DELAY_MS_INT = Math.max(
+  0,
+  parseInt(RUN_FETCH_DELAY_MS, 10) || 0,
+);
 const PAGE_SIZE = 100;
 const PAGE_CONCURRENCY = Math.max(
   1,
@@ -160,6 +165,80 @@ function mapVolunteerRoleNames(roleIds, raw) {
   }
 
   return 'No role recorded';
+}
+
+function buildTaskNameByAthleteId(rosterRows) {
+  const taskNameByAthleteId = new Map();
+
+  for (const row of rosterRows) {
+    const athleteId = parseNullableInt(
+      row?.athleteid ?? row?.AthleteID ?? row?.athleteId,
+    );
+    const name = firstNonEmptyString([
+      row?.TaskName,
+      row?.taskName,
+      row?.taskname,
+      row?.VolunteerRoleName,
+      row?.volunteerRoleName,
+    ]);
+
+    if (
+      Number.isFinite(athleteId) &&
+      name &&
+      !taskNameByAthleteId.has(athleteId)
+    ) {
+      taskNameByAthleteId.set(athleteId, name);
+    }
+  }
+
+  return taskNameByAthleteId;
+}
+
+async function fetchRostersByDate(client, eventId, dateStr) {
+  const endpoint = `/v1/events/${eventId}/rosters/${dateStr}`;
+  const maxAttempts = 4;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const firstRes = await client.get(endpoint, {
+        params: { limit: 100, offset: 0 },
+      });
+      let rows = firstRes.data?.data?.Rosters || [];
+      const range = firstRes.data?.['Content-Range']?.RostersRange?.[0];
+      const total = parseNullableInt(range?.max) || rows.length;
+
+      for (let offset = rows.length; offset < total; offset += 100) {
+        const res = await client.get(endpoint, {
+          params: { limit: 100, offset },
+        });
+        rows = rows.concat(res.data?.data?.Rosters || []);
+      }
+
+      return rows;
+    } catch (err) {
+      const status = err?.response?.status;
+      const retriable =
+        status === 403 ||
+        status === 429 ||
+        status === 500 ||
+        status === 502 ||
+        status === 503 ||
+        status === 504;
+
+      if (!retriable || attempt === maxAttempts) throw err;
+
+      const waitMs =
+        status === 403
+          ? RETRY_403_MS
+          : Math.max(RUN_FETCH_DELAY_MS_INT, 1000) * attempt;
+      console.warn(
+        `rosters ${dateStr}: HTTP ${status} attempt ${attempt}/${maxAttempts}; retrying in ${Math.round(waitMs / 1000)}s...`,
+      );
+      await sleep(waitMs);
+    }
+  }
+
+  return [];
 }
 
 async function parkrunAuth(username, password) {
@@ -534,9 +613,28 @@ function mapResultRow(raw) {
   };
 }
 
-function mapVolunteerRow(raw) {
+function mapVolunteerRow(raw, taskNameByAthleteId) {
   const roleIds = parseVolunteerRoleIds(raw.volunteerRoleIds);
-  const taskName = mapVolunteerRoleNames(roleIds, raw);
+  const athleteId = parseNullableInt(raw.AthleteID);
+  const directName = firstNonEmptyString([
+    raw?.TaskName,
+    raw?.taskName,
+    raw?.task_name,
+    raw?.VolunteerRoleName,
+    raw?.volunteerRoleName,
+    raw?.VolunteerRole,
+    raw?.volunteerRole,
+  ]);
+  const rosterName =
+    taskNameByAthleteId && athleteId != null
+      ? taskNameByAthleteId.get(athleteId) || null
+      : null;
+  const taskName =
+    directName ||
+    rosterName ||
+    (roleIds.length > 0
+      ? roleIds.map(id => `Role ${id}`).join(', ')
+      : 'No role recorded');
 
   return {
     roster_id: parseNullableInt(raw.VolID),
@@ -657,6 +755,7 @@ async function processEvent({
   }
 
   let insertedVolunteers = 0;
+  const rosterCache = new Map();
 
   console.log(
     `[${label}] Fetching volunteers and writing pages directly to ${volunteersTable}...`,
@@ -667,8 +766,35 @@ async function processEvent({
     baseParams: { eventNumber: eventId },
     label: `[${label}] volunteers`,
     onPage: async (rows, pageMeta) => {
+      // Fetch rosters for any event dates on this page not yet cached
+      const datesToFetch = [
+        ...new Set(
+          rows
+            .map(r => r.EventDate)
+            .filter(Boolean)
+            .map(d => d.replace(/-/g, '')),
+        ),
+      ];
+      for (const dateStr of datesToFetch) {
+        if (!rosterCache.has(dateStr)) {
+          const rosterRows = await fetchRostersByDate(client, eventId, dateStr);
+          rosterCache.set(dateStr, buildTaskNameByAthleteId(rosterRows));
+          console.log(
+            `[${label}] fetched roster for date ${dateStr} (${rosterRows.length} assignment(s)); cache size: ${rosterCache.size}.`,
+          );
+        }
+      }
+
       const mappedPageRows = rows
-        .map(mapVolunteerRow)
+        .map(raw => {
+          const dateStr = raw.EventDate
+            ? raw.EventDate.replace(/-/g, '')
+            : null;
+          return mapVolunteerRow(
+            raw,
+            (dateStr && rosterCache.get(dateStr)) || new Map(),
+          );
+        })
         .filter(r => r.roster_id != null && r.event_date);
 
       let pageToInsert = mappedPageRows;

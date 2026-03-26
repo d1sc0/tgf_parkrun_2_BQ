@@ -30,7 +30,7 @@ Volunteer role fields:
 - run_id: run instance number from the API row
 - task_id: first volunteer role ID for the row
 - task_ids: comma-separated list of all volunteer role IDs for the row
-- task_name: comma-separated role names resolved using a two-step approach: direct name fields on the volunteer API row are preferred (`TaskName`, `VolunteerRoleName`, `VolunteerRole` and lowercase variants); run-scoped roster metadata (`/v1/events/{eventId}/runs/{runId}/rosters`) is used as a fallback when no direct name is present
+- task_name: role name resolved using a three-step approach: (1) direct name fields on the volunteer API row (`TaskName`, `VolunteerRoleName`, `VolunteerRole` and lowercase variants); (2) date-scoped roster metadata (`/v1/events/{eventId}/rosters/{yyyymmdd}`) looked up by `athleteId` + `eventdate` for a direct per-person match; (3) `Role {id}` fallback if still unresolved
 
 ## BigQuery tables
 
@@ -197,6 +197,7 @@ Useful environment variables for `sync_all_data.js`:
 - `GET_ALL_START_OFFSET` (default `0`): resume/pickup offset for pagination; normalized to page size (100).
 - `GET_ALL_RETRY_403_MS` (default `100000`): wait time before retrying a request that returns HTTP 403.
 - `GET_ALL_PROGRESS_EVERY_PAGES` (default `10`): how often cumulative insert progress is logged.
+- `RUN_FETCH_DELAY_MS` (default `0`): milliseconds delay between roster fetches during volunteer processing. One request is made per unique event date, so rate-limiting is rarely needed.
 
 Example runs:
 

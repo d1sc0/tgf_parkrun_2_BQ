@@ -460,16 +460,16 @@ async function fetchEventVolunteers(
 }
 
 /**
- * Build a task-id -> task-name lookup from run-scoped roster rows.
- * This avoids using the future upcoming roster endpoint.
+ * Build an athleteId -> task-name lookup by fetching date-based rosters.
+ * Uses /v1/events/{eventId}/rosters/{yyyymmdd} which returns TaskName per athlete.
  */
-async function fetchVolunteerRoleNameMapByRunIds(client, eventId, runIds) {
-  const roleNameById = new Map();
-  const uniqueRunIds = [...new Set(runIds)].filter(Number.isFinite);
+async function fetchTaskNameByAthleteIdForDates(client, eventId, dates) {
+  const taskNameByKey = new Map();
+  const uniqueDates = [...new Set(dates)].filter(Boolean);
   const lookupStartedAt = Date.now();
 
-  for (let i = 0; i < uniqueRunIds.length; i += 1) {
-    const runId = uniqueRunIds[i];
+  for (const date of uniqueDates) {
+    const dateStr = String(date).replace(/-/g, '');
     const maxAttempts = 3;
     let rosterRows = null;
 
@@ -477,7 +477,7 @@ async function fetchVolunteerRoleNameMapByRunIds(client, eventId, runIds) {
       try {
         rosterRows = await multiGet(
           client,
-          `/v1/events/${eventId}/runs/${runId}/rosters`,
+          `/v1/events/${eventId}/rosters/${dateStr}`,
           {},
           'Rosters',
           'RostersRange',
@@ -499,7 +499,7 @@ async function fetchVolunteerRoleNameMapByRunIds(client, eventId, runIds) {
 
         const waitMs = Math.max(RUN_FETCH_DELAY_MS_INT, 1000) * attempt;
         console.warn(
-          `  rosters run ${runId}: applying retry pause of ${waitMs}ms (RUN_FETCH_DELAY_MS=${RUN_FETCH_DELAY_MS ?? 'unset'} => ${RUN_FETCH_DELAY_MS_INT}ms).`,
+          `  rosters ${dateStr}: HTTP ${status} attempt ${attempt}/${maxAttempts}; retrying in ${Math.round(waitMs / 1000)}s.`,
         );
         await sleep(waitMs);
       }
@@ -507,43 +507,27 @@ async function fetchVolunteerRoleNameMapByRunIds(client, eventId, runIds) {
 
     const rows = rosterRows || [];
     for (const row of rows) {
-      const rawId =
-        row?.taskid ??
-        row?.taskId ??
-        row?.TaskId ??
-        row?.TaskID ??
-        row?.roleId ??
-        row?.RoleId ??
-        row?.RoleID;
-      const id = rawId != null ? parseInt(rawId, 10) : null;
+      const rawAthleteId = row?.athleteid ?? row?.AthleteID ?? row?.athleteId;
+      const id = rawAthleteId != null ? parseInt(rawAthleteId, 10) : null;
       const name = firstNonEmptyString([
         row?.TaskName,
         row?.taskName,
         row?.taskname,
         row?.VolunteerRoleName,
         row?.volunteerRoleName,
-        row?.VolunteerRole,
-        row?.volunteerRole,
       ]);
-      if (Number.isFinite(id) && name && !roleNameById.has(id)) {
-        roleNameById.set(id, name);
+      if (Number.isFinite(id) && name) {
+        taskNameByKey.set(`${dateStr}:${id}`, name);
       }
-    }
-
-    if (RUN_FETCH_DELAY_MS_INT > 0 && i + 1 < uniqueRunIds.length) {
-      console.log(
-        `  rosters: applying inter-run pause of ${RUN_FETCH_DELAY_MS_INT}ms (RUN_FETCH_DELAY_MS=${RUN_FETCH_DELAY_MS ?? 'unset'} => ${RUN_FETCH_DELAY_MS_INT}ms).`,
-      );
-      await sleep(RUN_FETCH_DELAY_MS_INT);
     }
   }
 
   const lookupMs = Date.now() - lookupStartedAt;
   console.log(
-    `  Volunteer roster lookup completed in ${lookupMs}ms across ${uniqueRunIds.length} run(s).`,
+    `  Volunteer roster lookup completed in ${lookupMs}ms across ${uniqueDates.length} date(s).`,
   );
 
-  return roleNameById;
+  return taskNameByKey;
 }
 
 // ─── Environment ──────────────────────────────────────────────────────────────
@@ -915,7 +899,7 @@ function firstNonEmptyString(values) {
   return '';
 }
 
-function mapVolunteerRoleNames(roleIds, roleNameById, raw) {
+function mapVolunteerRoleNames(roleIds, taskNameByKey, raw) {
   // 1. Prefer a name returned directly on the raw volunteer row
   const directName = firstNonEmptyString([
     raw?.TaskName,
@@ -928,9 +912,19 @@ function mapVolunteerRoleNames(roleIds, roleNameById, raw) {
   ]);
   if (directName) return directName;
 
-  // 2. Fall back to run-scoped roster metadata lookup
+  // 2. Look up by date + athleteId from date-based roster
+  const dateStr = raw?.EventDate
+    ? String(raw.EventDate).replace(/-/g, '')
+    : null;
+  const athleteId = raw?.AthleteID != null ? parseInt(raw.AthleteID, 10) : null;
+  if (dateStr && Number.isFinite(athleteId)) {
+    const rosterName = taskNameByKey.get(`${dateStr}:${athleteId}`);
+    if (rosterName) return rosterName;
+  }
+
+  // 3. Fall back to role ID
   if (roleIds.length === 0) return 'No role recorded';
-  const names = roleIds.map(id => roleNameById.get(id) || `Role ${id}`);
+  const names = roleIds.map(id => `Role ${id}`);
   return names.join(', ');
 }
 
@@ -1119,10 +1113,13 @@ async function processRunScopedHistory({
     }
 
     if (volunteerRows && volunteerRows.length > 0) {
-      const roleNameById = await fetchVolunteerRoleNameMapByRunIds(
+      const datesForRosterLookup = [
+        ...new Set(volunteerRows.map(v => v.EventDate).filter(Boolean)),
+      ];
+      const taskNameByKey = await fetchTaskNameByAthleteIdForDates(
         client,
         eventId,
-        [runId],
+        datesForRosterLookup,
       );
       const mapped = volunteerRows.map(v => {
         const roleIds = parseVolunteerRoleIds(v.volunteerRoleIds);
@@ -1135,7 +1132,7 @@ async function processRunScopedHistory({
           athlete_id: v.AthleteID != null ? parseInt(v.AthleteID, 10) : null,
           task_id: roleIds.length > 0 ? roleIds[0] : null,
           task_ids: mapVolunteerRoleIdsCsv(roleIds),
-          task_name: mapVolunteerRoleNames(roleIds, roleNameById, v),
+          task_name: mapVolunteerRoleNames(roleIds, taskNameByKey, v),
           first_name: v.FirstName || null,
           last_name: v.LastName || null,
         };
@@ -1370,25 +1367,20 @@ async function processEvent({
   }
 
   if (volunteersToInsertRaw.length > 0) {
-    const runIdsForRosterLookup = [
-      ...new Set(
-        volunteersToInsertRaw
-          .map(v => parseInt(v.RunId, 10))
-          .filter(Number.isFinite),
-      ),
+    const datesForRosterLookup = [
+      ...new Set(volunteersToInsertRaw.map(v => v.EventDate).filter(Boolean)),
     ];
 
     const rosterLookupStartedAt = Date.now();
-    const roleNameById = await fetchVolunteerRoleNameMapByRunIds(
+    const taskNameByKey = await fetchTaskNameByAthleteIdForDates(
       client,
       eventId,
-      runIdsForRosterLookup,
+      datesForRosterLookup,
     );
     const rosterLookupMs = Date.now() - rosterLookupStartedAt;
     console.log(
-      `  Loaded ${roleNameById.size} volunteer role names from run rosters (${runIdsForRosterLookup.length} runs).`,
+      `  Loaded ${taskNameByKey.size} volunteer roster assignments from ${datesForRosterLookup.length} date(s) in ${rosterLookupMs}ms.`,
     );
-    console.log(`  Volunteer roster lookup phase took ${rosterLookupMs}ms.`);
 
     const volunteerRows = volunteersToInsertRaw.map(v => {
       const roleIds = parseVolunteerRoleIds(v.volunteerRoleIds);
@@ -1402,7 +1394,7 @@ async function processEvent({
         athlete_id: v.AthleteID != null ? parseInt(v.AthleteID, 10) : null,
         task_id: roleIds.length > 0 ? roleIds[0] : null,
         task_ids: mapVolunteerRoleIdsCsv(roleIds),
-        task_name: mapVolunteerRoleNames(roleIds, roleNameById, v),
+        task_name: mapVolunteerRoleNames(roleIds, taskNameByKey, v),
         first_name: v.FirstName || null,
         last_name: v.LastName || null,
       };
