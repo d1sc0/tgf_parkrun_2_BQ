@@ -189,11 +189,13 @@ const allYears = [...new Set(data.map(d => d.date.substring(0, 4)))]
   const genderFilter = wrapper.querySelector('#perf-gender-filter');
   const ageFilter = wrapper.querySelector('#perf-age-filter');
   const yearFilter = wrapper.querySelector('#perf-year-filter');
-  const multiYearContainer = wrapper.querySelector('perf-multi-year-container');
+  const multiYearContainer = wrapper.querySelector(
+    '#perf-multi-year-container',
+  );
   const tableBody = wrapper.querySelector('#perf-table-body');
   const modeRadios = wrapper.querySelectorAll('input[name="perf-view-mode"]');
   const yearDropdownContainer = wrapper.querySelector(
-    'perf-year-dropdown-container',
+    '#perf-year-dropdown-container',
   );
 
   // Sorting State
@@ -507,7 +509,7 @@ const allYears = [...new Set(data.map(d => d.date.substring(0, 4)))]
 </script>
 
 <style>
-  .attendance-wrapper {
+  .performance-wrapper {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;

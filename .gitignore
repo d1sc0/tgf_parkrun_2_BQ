@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+dist/
 
 # Environment and secrets
 .env
@@ -26,6 +27,7 @@ pnpm-debug.log*
 *.pid.lock
 .tmp_parkrun_pkg/
 parkrun.js-*.tgz
+.firebase/
 
 # Coverage / reports
 coverage/
