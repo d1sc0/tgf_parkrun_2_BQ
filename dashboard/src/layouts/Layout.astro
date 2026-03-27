@@ -1,0 +1,70 @@
+---
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} | Parkrun Dashboard</title>
+  </head>
+  <body>
+    <main class="layout-container">
+      <Header title={title} description={description} />
+      <slot />
+      <Footer />
+    </main>
+  </body>
+</html>
+
+<style>
+  /* Scoped styles for the layout wrapper */
+  .layout-container {
+    max-width: 1024px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 1.5rem; /* Equivalent to p-6 */
+  }
+</style>
+
+<style is:global>
+  /* Project-wide variables and resets */
+  :root {
+    --bg-color: #f9fafb;
+    --text-main: #111827;
+    --text-muted: #6b7280;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  a,
+  button {
+    transition: all 0.2s ease-in-out;
+  }
+</style>

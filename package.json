@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node sync_parkrun.js",
     "dev": "node sync_parkrun.js",
+    "dashboard": "npm --prefix dashboard run dev",
+    "dashboard:build": "npm --prefix dashboard run build",
     "setup:bq": "node utilities/create-bigquery-tables.js",
     "publish:views": "node utilities/publish-bigquery-views.js",
     "backfill": "node utilities/backfill-missing.js",

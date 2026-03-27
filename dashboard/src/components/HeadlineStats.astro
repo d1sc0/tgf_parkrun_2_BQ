@@ -1,0 +1,148 @@
+---
+import { runQuery } from '../lib/bigquery';
+import fs from 'node:fs';
+import path from 'node:path';
+
+// Read the shared SQL file
+// Note: path.resolve works relative to the project root during Astro SSR
+const sqlPath = path.resolve('../sql/bigquery/16_headline_stats.sql');
+const query = fs.readFileSync(sqlPath, 'utf-8');
+
+// Fetch data from BigQuery
+let rows = [];
+try {
+  rows = await runQuery(query);
+} catch (e) {
+  console.error('BigQuery Error in HeadlineStats:', e);
+}
+
+// Normalize keys to lowercase to prevent casing mismatches
+const rawStats = rows[0] || {};
+const stats = Object.keys(rawStats).reduce(
+  (acc, key) => {
+    acc[key.toLowerCase()] = rawStats[key];
+    return acc;
+  },
+  {} as Record<string, any>,
+);
+
+// Debugging
+console.log('HeadlineStats - Raw Stats:', rawStats);
+
+const formatNum = (val: any) => {
+  const num = Number(val);
+  return !isNaN(num) && val !== null ? num.toLocaleString() : '0';
+};
+---
+
+<div class="stats-container">
+  <!-- Main Event Stats -->
+  <section class="mb-12">
+    <h2 class="section-title main">Main Parkrun</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <p class="stat-label">Total Runs</p>
+        <p class="stat-value">{formatNum(stats.parkrun_finishers_count)}</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Volunteers</p>
+        <p class="stat-value">{formatNum(stats.parkrun_volunteers_count)}</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Total PBs</p>
+        <p class="stat-value text-orange">
+          {formatNum(stats.parkrun_pb_count)}
+        </p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Genuine PBs</p>
+        <p class="stat-value text-purple">
+          {formatNum(stats.parkrun_genuine_pb_count)}
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Junior Event Stats -->
+  {
+    stats.junior_finishers_count > 0 && (
+      <section>
+        <h2 class="section-title junior">Junior Parkrun</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <p class="stat-label">Total Runs</p>
+            <p class="stat-value">{formatNum(stats.junior_finishers_count)}</p>
+          </div>
+          <div class="stat-card">
+            <p class="stat-label">Volunteers</p>
+            <p class="stat-value">{formatNum(stats.junior_volunteers_count)}</p>
+          </div>
+          <div class="stat-card">
+            <p class="stat-label">Total PBs</p>
+            <p class="stat-value text-orange">
+              {formatNum(stats.junior_pb_count)}
+            </p>
+          </div>
+          <div class="stat-card">
+            <p class="stat-label">Genuine PBs</p>
+            <p class="stat-value text-purple">
+              {formatNum(stats.junior_genuine_pb_count)}
+            </p>
+          </div>
+        </div>
+      </section>
+    )
+  }
+</div>
+
+<style>
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  @media (min-width: 1024px) {
+    .stats-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+  .stat-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 1.5rem;
+    border: 1px solid #f3f4f6;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  }
+  .section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: 1rem;
+    padding: 0 0.25rem;
+  }
+  .section-title.main {
+    color: #2563eb;
+  }
+  .section-title.junior {
+    color: #16a34a;
+  }
+  .stat-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #9ca3af;
+    margin: 0 0 0.25rem 0;
+  }
+  .stat-value {
+    font-size: 1.875rem;
+    font-weight: 900;
+    color: #111827;
+    margin: 0;
+  }
+  .text-orange {
+    color: #f97316;
+  }
+  .text-purple {
+    color: #9333ea;
+  }
+</style>
