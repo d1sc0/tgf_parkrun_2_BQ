@@ -38,61 +38,73 @@ const formatNum = (val: any) => {
 <div class="stats-container">
   <!-- Main Event Stats -->
   <section class="mb-12">
-    <h2 class="section-title main">Main Parkrun</h2>
     <div class="stats-grid">
       <div class="stat-card">
-        <p class="stat-label">Total Runs</p>
-        <p class="stat-value">{formatNum(stats.parkrun_finishers_count)}</p>
-      </div>
-      <div class="stat-card">
-        <p class="stat-label">Volunteers</p>
-        <p class="stat-value">{formatNum(stats.parkrun_volunteers_count)}</p>
-      </div>
-      <div class="stat-card">
-        <p class="stat-label">Total PBs</p>
-        <p class="stat-value text-orange">
-          {formatNum(stats.parkrun_pb_count)}
+        <p class="stat-label">Total Events</p>
+        <p class="stat-value">
+          {formatNum(stats.total_parkrun_events)}
         </p>
       </div>
       <div class="stat-card">
-        <p class="stat-label">Genuine PBs</p>
+        <p class="stat-label">Total 5km Finishers</p>
+        <p class="stat-value">
+          {formatNum(stats.total_parkrun_finishers)}
+        </p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Combined KM Distance</p>
+        <p class="stat-value">
+          {formatNum(stats.parkrun_total_distance_km)}
+        </p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Total running time (days)</p>
+        <p class="stat-value">
+          {formatNum(Math.round(stats.parkrun_total_finish_time_days))}
+        </p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Average Weekly Finishers</p>
+        <p class="stat-value">
+          {formatNum(Math.round(stats.avg_parkrun_finishers_per_week))}
+        </p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Unique Athletes</p>
+        <p class="stat-value text-purple">{formatNum(stats.unique_athletes)}</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Unique Volunteers</p>
         <p class="stat-value text-purple">
+          {formatNum(stats.unique_volunteers)}
+        </p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Fastest Finish</p>
+        <p class="stat-value text-green">
+          {stats.parkrun_fastest_time}
+        </p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Average Finish</p>
+        <p class="stat-value text-green">{stats.parkrun_mean_time}</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">Longest Finsh</p>
+        <p class="stat-value text-green">{stats.parkrun_slowest_time}</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-label">PBs Counted</p>
+        <p class="stat-value">
           {formatNum(stats.parkrun_genuine_pb_count)}
         </p>
       </div>
+      <div class="stat-card">
+        <p class="stat-label">Clubs Counted</p>
+        <p class="stat-value">{formatNum(stats.distinct_clubs)}</p>
+      </div>
     </div>
   </section>
-
-  <!-- Junior Event Stats -->
-  {
-    stats.junior_finishers_count > 0 && (
-      <section>
-        <h2 class="section-title junior">Junior Parkrun</h2>
-        <div class="stats-grid">
-          <div class="stat-card">
-            <p class="stat-label">Total Runs</p>
-            <p class="stat-value">{formatNum(stats.junior_finishers_count)}</p>
-          </div>
-          <div class="stat-card">
-            <p class="stat-label">Volunteers</p>
-            <p class="stat-value">{formatNum(stats.junior_volunteers_count)}</p>
-          </div>
-          <div class="stat-card">
-            <p class="stat-label">Total PBs</p>
-            <p class="stat-value text-orange">
-              {formatNum(stats.junior_pb_count)}
-            </p>
-          </div>
-          <div class="stat-card">
-            <p class="stat-label">Genuine PBs</p>
-            <p class="stat-value text-purple">
-              {formatNum(stats.junior_genuine_pb_count)}
-            </p>
-          </div>
-        </div>
-      </section>
-    )
-  }
 </div>
 
 <style>
@@ -144,5 +156,8 @@ const formatNum = (val: any) => {
   }
   .text-purple {
     color: #9333ea;
+  }
+  .text-green {
+    color: #66cf04;
   }
 </style>
