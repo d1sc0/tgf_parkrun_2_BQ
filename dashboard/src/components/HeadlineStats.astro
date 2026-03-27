@@ -16,7 +16,11 @@ try {
   console.error('BigQuery Error in HeadlineStats:', e);
 }
 
-// Normalize keys to lowercase to prevent casing mismatches
+/**
+ * BigQuery returns case-sensitive column names based on SQL aliases.
+ * We normalize all keys to lowercase here to ensure the template logic
+ * doesn't break if the SQL aliases are changed.
+ */
 const rawStats = rows[0] || {};
 const stats = Object.keys(rawStats).reduce(
   (acc, key) => {

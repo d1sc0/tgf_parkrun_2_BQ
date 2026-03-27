@@ -76,6 +76,11 @@ const { title, description } = Astro.props;
     position: relative;
   }
 
+  /** 
+   * The nav is absolutely positioned to ensure the hamburger 
+   * remains at the very top of the header area, regardless of 
+   * how long the TGF title or page description wraps.
+   */
   .nav {
     /* Position the nav (containing the hamburger) absolutely */
     position: absolute;

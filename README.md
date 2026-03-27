@@ -1,11 +1,33 @@
 # tgf-parkrun-processor
 
-Syncs Parkrun event results and historical volunteer data into BigQuery for analysis.
+A specialized ETL pipeline and mobile-first analytics dashboard for Parkrun event data. This project extracts results and volunteer history from the Parkrun API, stores them in Google BigQuery, and visualizes insights using an Astro SSR dashboard.
 
-Script layout:
+## 🏗 Architecture
 
-- Main sync entrypoint: `sync_parkrun.js`
-- Utility scripts live under `utilities/` (setup, view publishing, backfill, compare)
+- **ETL (Node.js/CommonJS):** Periodically fetches data from Parkrun and pushes to BigQuery.
+- **Dashboard (Astro/ESM):** A server-side rendered (SSR) frontend that queries BigQuery directly.
+- **Data Layer (BigQuery):** 26+ SQL views that act as a single source of truth for both the sync logic and the visualization.
+
+## 📱 Dashboard Features
+
+- **Privacy First:** Personally Identifiable Information (PII) like athlete names are never stored in the repository or as static assets. They are fetched from BigQuery at request time.
+- **Mobile Optimized:** Built with a "hamburger-first" navigation and card-based layouts for effective use at the finish line.
+- **Performance:** Zero-JS baseline using Astro's Islands architecture.
+
+## 🚀 Quick Start
+
+### Syncing Data
+
+```bash
+npm install
+npm run dev # Runs the incremental sync
+```
+
+### Running the Dashboard
+
+```bash
+npm run dashboard # Starts Astro dev server
+```
 
 ## Maintainer Reference
 
