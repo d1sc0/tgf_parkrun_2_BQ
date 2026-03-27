@@ -89,7 +89,7 @@ const allYears = [...new Set(data.map(d => d.date.substring(0, 4)))]
   .sort((a, b) => b.localeCompare(a));
 ---
 
-<div class="attendance-wrapper">
+<div class="performance-wrapper">
   <div class="controls-bar">
     <div class="mode-selector">
       <label class="radio-label">
@@ -134,7 +134,7 @@ const allYears = [...new Set(data.map(d => d.date.substring(0, 4)))]
 
     <div id="perf-multi-year-container" class="hidden">
       <div class="filter-group">
-        <label>Select Years to Overlay (select 2)</label>
+        <label>Select 2 Years to Overlay</label>
         <div class="checkbox-group">
           {
             allYears.map((year, i) => (
@@ -185,22 +185,21 @@ const allYears = [...new Set(data.map(d => d.date.substring(0, 4)))]
 
 <script define:vars={{ rawData: data }}>
   let chart;
-  const genderFilter = document.getElementById('perf-gender-filter');
-  const ageFilter = document.getElementById('perf-age-filter');
-  const yearFilter = document.getElementById('perf-year-filter');
-  const multiYearContainer = document.getElementById(
-    'perf-multi-year-container',
-  );
-  const tableBody = document.getElementById('perf-table-body');
-  const modeRadios = document.querySelectorAll('input[name="perf-view-mode"]');
-  const yearDropdownContainer = document.getElementById(
+  const wrapper = document.querySelector('.performance-wrapper');
+  const genderFilter = wrapper.querySelector('#perf-gender-filter');
+  const ageFilter = wrapper.querySelector('#perf-age-filter');
+  const yearFilter = wrapper.querySelector('#perf-year-filter');
+  const multiYearContainer = wrapper.querySelector('perf-multi-year-container');
+  const tableBody = wrapper.querySelector('#perf-table-body');
+  const modeRadios = wrapper.querySelectorAll('input[name="perf-view-mode"]');
+  const yearDropdownContainer = wrapper.querySelector(
     'perf-year-dropdown-container',
   );
 
   // Sorting State
   let currentSort = { col: 'category', dir: 'asc' };
 
-  document.querySelectorAll('.data-table th.sortable').forEach(th => {
+  wrapper.querySelectorAll('.data-table th.sortable').forEach(th => {
     th.addEventListener('click', () => handleSort(th.dataset.col));
   });
 
@@ -219,7 +218,7 @@ const allYears = [...new Set(data.map(d => d.date.substring(0, 4)))]
       const isCompare = radio.value === 'compare';
       multiYearContainer.classList.toggle('hidden', !isCompare);
       yearDropdownContainer.classList.toggle('hidden', isCompare);
-      document
+      wrapper
         .querySelector('.table-card')
         ?.classList.toggle('hidden', isCompare);
       updateView();
@@ -479,7 +478,7 @@ const allYears = [...new Set(data.map(d => d.date.substring(0, 4)))]
   }
 
   function updateSortIcons() {
-    document.querySelectorAll('.data-table th.sortable').forEach(th => {
+    wrapper.querySelectorAll('.data-table th.sortable').forEach(th => {
       const icon = th.querySelector('.sort-icon');
       if (th.dataset.col === currentSort.col) {
         icon.textContent = currentSort.dir === 'asc' ? '↑' : '↓';
