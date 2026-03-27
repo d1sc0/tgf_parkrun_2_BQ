@@ -18,7 +18,7 @@
     }
   ],
   "apphosting": {
-    "backendId": "tgf-dashboard",
+    "backendId": "tgf-dashboard-back",
     "rootDir": "/",
     "ignore": [
       "node_modules",

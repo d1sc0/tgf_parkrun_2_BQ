@@ -141,6 +141,24 @@ Run latest-only sync (local one-off):
 
 FETCH_LATEST_ONLY=true SCRAPE_MAX_EVENTS=1 RUN_JUNIOR=false npm run dev
 
+## 🚀 Deployment
+
+The analytics dashboard is optimized for **Firebase App Hosting** using Server-Side Rendering (SSR).
+
+### Deployment Workflow
+
+Deployment is managed directly by **Firebase App Hosting**. When you link your repository in the Firebase Console, Firebase creates its own internal pipeline. Every push to the `main` branch triggers an automatic build and rollout. You do **not** need a manual deployment workflow file in `.github/workflows/`.
+
+### Firebase Configuration
+
+The following files in the repository root control the deployment:
+
+- **`firebase.json`**: Primary hosting and rewrite configuration.
+- **`apphosting.yaml`**: Backend resource settings (CPU, Memory, Concurrency) for the Cloud Run instance.
+- **Environment Variables**: You must configure `GCP_PROJECT_ID` as an environment variable in the Firebase Console (App Hosting settings) so the SSR components can query BigQuery.
+
+**IAM Permissions:** Ensure the App Hosting backend service account has the `BigQuery Data Viewer` and `BigQuery Job User` roles assigned in the Google Cloud Console.
+
 ## BigQuery query pack
 
 Reusable BigQuery SQL files are available in:
