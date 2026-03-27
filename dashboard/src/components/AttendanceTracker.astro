@@ -97,7 +97,7 @@ const allYears = [...new Set(data.map(d => d.date.substring(0, 4)))]
     <!-- Comparison Selection (visible when 'Compare' mode active) -->
     <div id="multi-year-container" class="hidden">
       <div class="filter-group">
-        <label>Select Years to Overlay</label>
+        <label>Select Years to Overlay (select 2)</label>
         <div class="checkbox-group">
           {
             allYears.map((year, i) => (
@@ -388,7 +388,16 @@ const allYears = [...new Set(data.map(d => d.date.substring(0, 4)))]
   yearFilter.addEventListener('change', updateView);
 
   multiYearContainer.addEventListener('change', e => {
-    if (e.target.classList.contains('year-checkbox')) updateView();
+    if (e.target.classList.contains('year-checkbox')) {
+      const checked = multiYearContainer.querySelectorAll(
+        '.year-checkbox:checked',
+      );
+      if (checked.length > 2) {
+        e.target.checked = false;
+      } else {
+        updateView();
+      }
+    }
   });
 
   // Initial render
