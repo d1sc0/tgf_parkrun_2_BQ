@@ -251,7 +251,21 @@ const allYears = [...new Set(data.map(d => d.year))]
         : rawData.filter(r => selectedYears.includes(r.year));
 
     const roleCounts = activeRows.reduce((acc, curr) => {
-      acc[curr.role] = (acc[curr.role] || 0) + 1;
+      // Split combined roles (e.g., "Marshal, Run Director") and process each individually
+      const rawRoles = (curr.role || 'Unknown').split(',');
+
+      rawRoles.forEach(raw => {
+        // Normalize role names: Trim whitespace and ensure consistent casing
+        const normalizedRole = raw
+          .trim()
+          .split(' ')
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+          .join(' ');
+
+        if (normalizedRole) {
+          acc[normalizedRole] = (acc[normalizedRole] || 0) + 1;
+        }
+      });
       return acc;
     }, {});
 
@@ -277,7 +291,7 @@ const allYears = [...new Set(data.map(d => d.year))]
     }
 
     // 3. Table Logic
-    const total = activeRows.length;
+    const total = Object.values(roleCounts).reduce((a, b) => a + b, 0);
     let tableData = Object.entries(roleCounts).map(([role, count]) => ({
       role,
       count,
