@@ -4,11 +4,11 @@ import './lib/firebase-admin'; // Ensure admin is initialized
 
 export const onRequest = defineMiddleware(async (context, next) => {
   // Debug log to confirm request entry and check headers for CSRF issues
-  console.log(
-    `[Middleware] Method: ${context.request.method} Path: ${context.url.pathname}`,
-  );
-  console.log(`[Middleware] Origin: ${context.request.headers.get('origin')}`);
-  console.log(`[Middleware] Host: ${context.request.headers.get('host')}`);
+  //console.log(
+  //  `[Middleware] Method: ${context.request.method} Path: ${context.url.pathname}`,
+  //);
+  //console.log(`[Middleware] Origin: ${context.request.headers.get('origin')}`);
+  //console.log(`[Middleware] Host: ${context.request.headers.get('host')}`);
 
   const sessionCookie = context.cookies.get('__session')?.value;
 
