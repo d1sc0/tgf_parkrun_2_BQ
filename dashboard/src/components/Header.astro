@@ -5,6 +5,9 @@ interface Props {
 }
 
 const { title, description } = Astro.props;
+
+// In Astro SSR, user state is typically passed via Astro.locals from middleware
+const user = Astro.locals.user;
 ---
 
 <header class="header">
@@ -39,7 +42,22 @@ const { title, description } = Astro.props;
         <li><a href="/attendance">Attendance</a></li>
         <li><a href="/performance">Performance</a></li>
         <li><a href="/volunteers">Volunteers</a></li>
-        <li><a href="/top-lists">Top Lists</a></li>
+        {user && <li><a href="/top-lists">Top Lists</a></li>}
+        {
+          user ? (
+            <li>
+              <a href="/api/auth/signout" class="auth-link">
+                Log Out
+              </a>
+            </li>
+          ) : (
+            <li>
+              <a href="/login" class="auth-link">
+                Log In
+              </a>
+            </li>
+          )
+        }
       </ul>
     </nav>
   </div>

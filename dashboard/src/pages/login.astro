@@ -1,0 +1,194 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout
+  title="Login"
+  description="Sign in to access protected dashboard features."
+>
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-header">
+        <h2 class="login-title">Welcome back</h2>
+        <p class="login-subtitle">Sign in to access additional pages</p>
+      </div>
+
+      <form id="login-form" class="login-form">
+        <div class="form-group">
+          <label for="email">Email address</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            required
+            placeholder="name@example.com"
+            autofocus
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            required
+            placeholder="••••••••"
+          />
+        </div>
+
+        <div id="error-message" class="error-message hidden"></div>
+
+        <button type="submit" class="submit-button"> Sign In </button>
+      </form>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  import { initializeApp } from 'firebase/app';
+  import {
+    getAuth,
+    signInWithEmailAndPassword,
+    inMemoryPersistence,
+    setPersistence,
+  } from 'firebase/auth';
+
+  // Replace these with your actual Firebase project config
+  const firebaseConfig = {
+    apiKey: 'AIzaSyCPDbWqBFjNJOL-Zja5NHfqBvMEfo4C9ic',
+    authDomain: 'tgf-parkrun-processor.firebaseapp.com',
+    projectId: 'tgf-parkrun-processor',
+    storageBucket: 'tgf-parkrun-processor.firebasestorage.app',
+    messagingSenderId: '850847458865',
+    appId: '1:850847458865:web:54196104a9e9a69ed89710',
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+
+  // We use in-memory persistence because the session is managed by the
+  // httpOnly cookie we set via the API, not the client-side SDK.
+  setPersistence(auth, inMemoryPersistence);
+
+  const form = document.getElementById('login-form') as HTMLFormElement;
+  const errorEl = document.getElementById('error-message');
+
+  form?.addEventListener('submit', async e => {
+    e.preventDefault();
+    if (errorEl) errorEl.classList.add('hidden');
+
+    const formData = new FormData(form);
+    const email = formData.get('email')?.toString();
+    const password = formData.get('password')?.toString();
+
+    if (!email || !password) return;
+
+    try {
+      // 1. Sign in on the client
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
+      const idToken = await userCredential.user.getIdToken();
+
+      // 2. Send token to server to create session cookie
+      const res = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+
+      if (res.ok) {
+        window.location.assign('/top-lists');
+      } else {
+        throw new Error('Failed to create server session');
+      }
+    } catch (error: any) {
+      if (errorEl) {
+        errorEl.innerText = 'Invalid email or password.';
+        errorEl.classList.remove('hidden');
+      }
+    }
+  });
+</script>
+
+<style>
+  .login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: calc(100vh - 300px);
+    padding: 1rem;
+  }
+  .login-card {
+    background: white;
+    padding: 2.5rem;
+    border-radius: 1.5rem;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 400px;
+  }
+  .login-header {
+    margin-bottom: 2rem;
+  }
+  .login-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #111827;
+    margin: 0;
+  }
+  .login-subtitle {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin: 0.5rem 0 0 0;
+  }
+  .login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+  .form-group label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #374151;
+    letter-spacing: 0.05em;
+  }
+  .form-group input {
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    border: 1px solid #d1d5db;
+    font-size: 1rem;
+    background: #f9fafb;
+  }
+  .submit-button {
+    background: #2563eb;
+    color: white;
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .submit-button:hover {
+    background: #1d4ed8;
+  }
+  .error-message {
+    color: #ef4444;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  .hidden {
+    display: none;
+  }
+</style>
