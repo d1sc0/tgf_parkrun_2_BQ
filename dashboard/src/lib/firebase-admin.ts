@@ -7,9 +7,10 @@ import path from 'node:path';
  * For Firebase App Hosting, it automatically uses ADC.
  */
 if (!getApps().length) {
-  const keyFilename = import.meta.env.GOOGLE_APPLICATION_CREDENTIALS;
+  // Use process.env for reliable access to system variables in production SSR
+  const keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   const projectId =
-    import.meta.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
 
   if (!projectId) {
     console.error(
