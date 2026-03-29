@@ -1,16 +1,85 @@
 ---
-
+// Access the user state from Astro.locals (populated by middleware)
+const user = Astro.locals.user;
+const currentYear = new Date().getFullYear();
 ---
 
-<footer class="footer"></footer>
+<footer class="footer">
+  <div class="footer-content">
+    <div class="footer-info">
+      <p>&copy; {currentYear} TGF parkrun data dive</p>
+      <p class="text-xs">Built for the community</p>
+    </div>
+
+    <nav class="footer-nav">
+      {
+        user ? (
+          <a href="/api/auth/signout" class="footer-link auth-trigger">
+            Sign Out
+          </a>
+        ) : (
+          <a href="/login" class="footer-link auth-trigger">
+            Sign In
+          </a>
+        )
+      }
+    </nav>
+  </div>
+</footer>
 
 <style>
   .footer {
-    margin-top: 3rem;
-    padding-top: 2rem;
-    border-top: none;
+    margin-top: 4rem;
+    padding: 2rem 0;
+    border-top: 1px solid #e5e7eb;
+    color: var(--text-muted);
+  }
+
+  .footer-content {
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
     align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .footer-info p {
+    margin: 0;
+  }
+
+  .text-xs {
+    font-size: 0.75rem;
+    opacity: 0.8;
+  }
+
+  .footer-link {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s;
+  }
+
+  .footer-link:hover {
+    color: var(--text-main);
+    text-decoration: underline;
+  }
+
+  .auth-trigger {
+    padding: 0.5rem 1rem;
+    background: #f3f4f6;
+    border-radius: 0.5rem;
+  }
+
+  .auth-trigger:hover {
+    background: #e5e7eb;
+    text-decoration: none;
+  }
+
+  /* Stack on mobile */
+  @media (max-width: 640px) {
+    .footer-content {
+      flex-direction: column;
+      gap: 1.5rem;
+      text-align: center;
+    }
   }
 </style>

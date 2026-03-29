@@ -42,19 +42,10 @@ const user = Astro.locals.user;
         <li><a href="/attendance">Attendance</a></li>
         <li><a href="/performance">Performance</a></li>
         <li><a href="/volunteers">Volunteers</a></li>
-        {user && <li><a href="/top-lists">Top Lists</a></li>}
         {
-          user ? (
+          user && (
             <li>
-              <a href="/api/auth/signout" class="auth-link">
-                Log Out
-              </a>
-            </li>
-          ) : (
-            <li>
-              <a href="/login" class="auth-link">
-                Log In
-              </a>
+              <a href="/top-lists">Top Lists</a>
             </li>
           )
         }

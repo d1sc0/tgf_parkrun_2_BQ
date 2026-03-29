@@ -1,0 +1,514 @@
+---
+import { runQuery } from '../lib/bigquery';
+
+/**
+ * Top Lists Component (SSR Version)
+ * Fetches 6 distinct "Top 20" datasets from BigQuery.
+ */
+
+const projectId = import.meta.env.GCP_PROJECT_ID;
+
+const queries = {
+  athletes: `
+    WITH BaseStats AS (
+      SELECT
+        r.athlete_id,
+        ANY_VALUE(CONCAT(r.first_name, ' ', r.last_name)) as athlete_name,
+        COUNT(DISTINCT r.run_id) as total_runs,
+        ANY_VALUE(
+          CASE
+            WHEN r.age_category LIKE 'W%' OR r.age_category LIKE 'JW%' OR r.age_category LIKE 'SW%' OR r.age_category LIKE 'VW%' THEN 'Female'
+            WHEN r.age_category LIKE 'M%' OR r.age_category LIKE 'JM%' OR r.age_category LIKE 'SM%' OR r.age_category LIKE 'VM%' THEN 'Male'
+            ELSE 'Unknown'
+          END
+        ) as gender
+      FROM \`${projectId}.parkrun_data.results\` r
+      WHERE r.is_unknown_athlete = false
+      GROUP BY r.athlete_id
+    ),
+    VolStats AS (
+      SELECT 
+        athlete_id, 
+        COUNT(DISTINCT event_date) as vol_appearances
+      FROM \`${projectId}.parkrun_data.volunteers\`
+      GROUP BY athlete_id
+    ),
+    FastestStats AS (
+      SELECT
+        r.athlete_id,
+        r.finish_time,
+        CAST(r.event_date AS STRING) as event_date_str,
+        r.run_id,
+        ROW_NUMBER() OVER (PARTITION BY r.athlete_id ORDER BY
+          CASE
+            WHEN ARRAY_LENGTH(SPLIT(r.finish_time, ':')) = 3 THEN
+              CAST(SPLIT(r.finish_time, ':')[OFFSET(0)] AS INT64) * 3600 +
+              CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64) * 60 +
+              CAST(SPLIT(finish_time, ':')[OFFSET(2)] AS INT64)
+            WHEN ARRAY_LENGTH(SPLIT(r.finish_time, ':')) = 2 THEN
+              CAST(SPLIT(r.finish_time, ':')[OFFSET(0)] AS INT64) * 60 +
+              CAST(SPLIT(r.finish_time, ':')[OFFSET(1)] AS INT64)
+            ELSE 999999
+          END ASC, r.event_date ASC
+        ) as rn
+      FROM \`${projectId}.parkrun_data.results\` r
+      WHERE r.is_unknown_athlete = false AND r.finish_time IS NOT NULL AND r.finish_time != ''
+    )
+    SELECT
+      a.athlete_name as label,
+      a.total_runs as value,
+      f.finish_time as fastest_time,
+      f.event_date_str as fastest_date,
+      f.run_id as fastest_run_id,
+      IFNULL(v.vol_appearances, 0) as vol_count
+    FROM BaseStats a
+    LEFT JOIN VolStats v ON a.athlete_id = v.athlete_id
+    LEFT JOIN FastestStats f ON a.athlete_id = f.athlete_id AND f.rn = 1
+    ORDER BY a.total_runs DESC
+    LIMIT 20`,
+  athletes_male: `
+    WITH BaseStats AS (
+      SELECT
+        r.athlete_id,
+        ANY_VALUE(CONCAT(r.first_name, ' ', r.last_name)) as athlete_name,
+        COUNT(DISTINCT r.run_id) as total_runs,
+        ANY_VALUE(
+          CASE
+            WHEN r.age_category LIKE 'W%' OR r.age_category LIKE 'JW%' OR r.age_category LIKE 'SW%' OR r.age_category LIKE 'VW%' THEN 'Female'
+            WHEN r.age_category LIKE 'M%' OR r.age_category LIKE 'JM%' OR r.age_category LIKE 'SM%' OR r.age_category LIKE 'VM%' THEN 'Male'
+            ELSE 'Unknown'
+          END
+        ) as gender
+      FROM \`${projectId}.parkrun_data.results\` r
+      WHERE r.is_unknown_athlete = false
+      GROUP BY r.athlete_id
+    ),
+    VolStats AS (
+      SELECT 
+        athlete_id, 
+        COUNT(DISTINCT event_date) as vol_appearances
+      FROM \`${projectId}.parkrun_data.volunteers\`
+      GROUP BY athlete_id
+    ),
+    FastestStats AS (
+      SELECT
+        r.athlete_id,
+        r.finish_time,
+        CAST(r.event_date AS STRING) as event_date_str,
+        r.run_id,
+        ROW_NUMBER() OVER (PARTITION BY r.athlete_id ORDER BY
+          CASE
+            WHEN ARRAY_LENGTH(SPLIT(r.finish_time, ':')) = 3 THEN
+              CAST(SPLIT(r.finish_time, ':')[OFFSET(0)] AS INT64) * 3600 +
+              CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64) * 60 +
+              CAST(SPLIT(finish_time, ':')[OFFSET(2)] AS INT64)
+            WHEN ARRAY_LENGTH(SPLIT(r.finish_time, ':')) = 2 THEN
+              CAST(SPLIT(r.finish_time, ':')[OFFSET(0)] AS INT64) * 60 +
+              CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64)
+            ELSE 999999
+          END ASC, r.event_date ASC
+        ) as rn
+      FROM \`${projectId}.parkrun_data.results\` r
+      WHERE r.is_unknown_athlete = false AND r.finish_time IS NOT NULL AND r.finish_time != ''
+    )
+    SELECT
+      a.athlete_name as label,
+      a.total_runs as value,
+      f.finish_time as fastest_time,
+      f.event_date_str as fastest_date,
+      f.run_id as fastest_run_id,
+      IFNULL(v.vol_appearances, 0) as vol_count
+    FROM BaseStats a
+    LEFT JOIN VolStats v ON a.athlete_id = v.athlete_id
+    LEFT JOIN FastestStats f ON a.athlete_id = f.athlete_id AND f.rn = 1
+    WHERE a.gender = 'Male'
+    ORDER BY a.total_runs DESC
+    LIMIT 20`,
+  athletes_female: `
+    WITH BaseStats AS (
+      SELECT
+        r.athlete_id,
+        ANY_VALUE(CONCAT(r.first_name, ' ', r.last_name)) as athlete_name,
+        COUNT(DISTINCT r.run_id) as total_runs,
+        ANY_VALUE(
+          CASE
+            WHEN r.age_category LIKE 'W%' OR r.age_category LIKE 'JW%' OR r.age_category LIKE 'SW%' OR r.age_category LIKE 'VW%' THEN 'Female'
+            WHEN r.age_category LIKE 'M%' OR r.age_category LIKE 'JM%' OR r.age_category LIKE 'SM%' OR r.age_category LIKE 'VM%' THEN 'Male'
+            ELSE 'Unknown'
+          END
+        ) as gender
+      FROM \`${projectId}.parkrun_data.results\` r
+      WHERE r.is_unknown_athlete = false
+      GROUP BY r.athlete_id
+    ),
+    VolStats AS (
+      SELECT 
+        athlete_id, 
+        COUNT(DISTINCT event_date) as vol_appearances
+      FROM \`${projectId}.parkrun_data.volunteers\`
+      GROUP BY athlete_id
+    ),
+    FastestStats AS (
+      SELECT
+        r.athlete_id,
+        r.finish_time,
+        CAST(r.event_date AS STRING) as event_date_str,
+        r.run_id,
+        ROW_NUMBER() OVER (PARTITION BY r.athlete_id ORDER BY
+          CASE
+            WHEN ARRAY_LENGTH(SPLIT(r.finish_time, ':')) = 3 THEN
+              CAST(SPLIT(r.finish_time, ':')[OFFSET(0)] AS INT64) * 3600 +
+              CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64) * 60 +
+              CAST(SPLIT(finish_time, ':')[OFFSET(2)] AS INT64)
+            WHEN ARRAY_LENGTH(SPLIT(r.finish_time, ':')) = 2 THEN
+              CAST(SPLIT(r.finish_time, ':')[OFFSET(0)] AS INT64) * 60 +
+              CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64)
+            ELSE 999999
+          END ASC, r.event_date ASC
+        ) as rn
+      FROM \`${projectId}.parkrun_data.results\` r
+      WHERE r.is_unknown_athlete = false AND r.finish_time IS NOT NULL AND r.finish_time != ''
+    )
+    SELECT
+      a.athlete_name as label,
+      a.total_runs as value,
+      f.finish_time as fastest_time,
+      f.event_date_str as fastest_date,
+      f.run_id as fastest_run_id,
+      IFNULL(v.vol_appearances, 0) as vol_count
+    FROM BaseStats a
+    LEFT JOIN VolStats v ON a.athlete_id = v.athlete_id
+    LEFT JOIN FastestStats f ON a.athlete_id = f.athlete_id AND f.rn = 1
+    WHERE a.gender = 'Female'
+    ORDER BY a.total_runs DESC
+    LIMIT 20`,
+  volunteers: `
+    WITH VolBase AS (
+      SELECT
+        athlete_id,
+        ANY_VALUE(CONCAT(first_name, ' ', last_name)) as vol_name,
+        COUNT(DISTINCT event_date) as appearances
+      FROM \`${projectId}.parkrun_data.volunteers\`
+      WHERE athlete_id != 2214
+      GROUP BY athlete_id
+    ),
+    RunStats AS (
+      SELECT
+        athlete_id,
+        NULLIF(COUNT(DISTINCT run_id), 0) as total_runs,
+        MIN(finish_time) as fastest_time
+      FROM \`${projectId}.parkrun_data.results\`
+      WHERE is_unknown_athlete = false
+      GROUP BY athlete_id
+    )
+    SELECT v.vol_name as label, v.appearances as value, r.total_runs as run_count, r.fastest_time
+    FROM VolBase v
+    LEFT JOIN RunStats r ON v.athlete_id = r.athlete_id
+    ORDER BY value DESC LIMIT 20`,
+  events: `
+    SELECT CAST(event_date AS STRING) as label, COUNT(*) as value, run_id 
+    FROM \`${projectId}.parkrun_data.results\` 
+    GROUP BY label, run_id ORDER BY value DESC LIMIT 20`,
+  clubs: `
+    SELECT club_name as label, COUNT(*) as value 
+    FROM \`${projectId}.parkrun_data.results\` 
+    WHERE club_name IS NOT NULL AND club_name != "" 
+    GROUP BY 1 ORDER BY value DESC LIMIT 20`,
+};
+
+const queryKeys = Object.keys(queries);
+const resultsArray = await Promise.all(
+  queryKeys.map(k => runQuery(queries[k])),
+);
+const datasets = queryKeys.reduce(
+  (acc, key, i) => {
+    acc[key] = resultsArray[i];
+    return acc;
+  },
+  {} as Record<string, any[]>,
+);
+
+const listMeta = [
+  {
+    key: 'athletes',
+    title: 'Top 20 Attendees (ALL)',
+    entity: 'Athlete',
+    header: 'Runs',
+    format: 'num', // Added format for main value
+    extra_cols: [
+      { header: 'Fastest', key: 'fastest_time', format: 'time_string' },
+      { header: 'Date', key: 'fastest_date', format: 'date_string' },
+      { header: 'Vol', key: 'vol_count', format: 'num' },
+    ],
+  },
+  {
+    key: 'athletes_male',
+    title: 'Top 20 Attendees (Male)',
+    entity: 'Athlete',
+    header: 'Runs',
+    format: 'num', // Added format for main value
+    extra_cols: [
+      { header: 'Fastest', key: 'fastest_time', format: 'time_string' },
+      { header: 'Date', key: 'fastest_date', format: 'date_string' },
+      { header: 'Vol', key: 'vol_count', format: 'num' },
+    ],
+  },
+  {
+    key: 'athletes_female',
+    title: 'Top 20 Attendees (Female)',
+    entity: 'Athlete',
+    header: 'Runs',
+    format: 'num', // Added format for main value
+    extra_cols: [
+      { header: 'Fastest', key: 'fastest_time', format: 'time_string' },
+      { header: 'Date', key: 'fastest_date', format: 'date_string' },
+      { header: 'Vol', key: 'vol_count', format: 'num' },
+    ],
+  },
+  {
+    key: 'volunteers',
+    title: 'TOP 20 Volunteers (ALL)',
+    entity: 'Volunteer',
+    header: 'TGF Vol Count', // Corrected header
+    format: 'num', // Added format for main value
+    extra_cols: [ // Added format for extra_cols
+      { header: 'Runs', key: 'run_count', format: 'num_or_dash' },
+      { header: 'Fastest', key: 'fastest_time', format: 'time_string' },
+    ],
+  },
+  {
+    key: 'events',
+    title: 'Top 20 Attended Events',
+    entity: 'Event Date',
+    header: 'Finishers',
+    format: 'num', // Added format for main value
+    extra_cols: [
+      { header: 'Run ID', key: 'run_id', format: 'num' },
+      { header: 'Fastest', key: 'fastest_time', format: 'time_string' },
+      { header: 'Mean', key: 'mean_time', format: 'time_string' },
+      { header: 'Slowest', key: 'slowest_time', format: 'time_string' },
+    ],
+  },
+  {
+    key: 'clubs',
+    title: 'Clubs by Attendance',
+    entity: 'Running Club',
+    header: 'Appearances',
+    format: 'num', // Added format for main value
+  },
+];
+
+function formatValue(value: any, formatType: string, row: any, colKey: string) {
+  if (value === null || value === undefined || value === '') return '-';
+  
+  switch (formatType) {
+    case 'date_string':
+      const parts = String(value).split('-');
+      if (parts.length === 3) {
+        const dmy = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        // Only add run_id suffix for specific date columns
+        if (colKey === 'fastest_date' || (colKey === 'label' && row.run_id)) {
+          const rid = row.fastest_run_id || row.run_id;
+          return rid ? `${dmy} (#${rid})` : dmy;
+        }
+        return dmy;
+      }
+      return value;
+    case 'time_string':
+      return value; // SQL already formats it, so just return
+    case 'num':
+      return Number(value).toLocaleString();
+    case 'num_or_dash':
+      // Display 0 as 0, only dash for truly null/undefined/empty/non-finite
+      return Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value).toLocaleString() : '-';
+    default:
+      return String(value);
+  }
+}
+---
+
+<div class="top-lists-wrapper">
+  <div class="jump-menu" id="top">
+    <p class="menu-label">Jump to:</p>
+    <div class="menu-links">
+      {listMeta.map(meta => <a href={`#${meta.key}`}>{meta.title}</a>)}
+    </div>
+  </div>
+
+  {
+    listMeta.map(meta => (
+      <div class="table-card" id={meta.key}>
+        <div class="table-header-box">
+          <h3 class="card-title">{meta.title}</h3>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 60px">Rank</th>
+                <th>{meta.entity}</th>
+                <th class="text-right">{meta.header}</th>
+                {meta.extra_cols?.map(col => (
+                  <th class="text-right">{col.header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {datasets[meta.key]?.map((row, i) => (
+                <tr>
+                  <td class="text-muted font-bold">{i + 1}</td>
+                  <td class="font-medium">
+                    {meta.key === 'events'
+                      ? formatValue(row.label, 'date_string', row, 'label')
+                      : row.label}
+                  </td>
+                  <td class="text-right font-bold">
+                    {formatValue(row.value, meta.format, row, 'value')}
+                  </td>
+                  {meta.extra_cols?.map(col => (
+                    <td class="text-right">
+                      {formatValue(row[col.key], col.format, row, col.key)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="back-to-top-container">
+        <a href="#top" class="back-to-top">
+          Back to top ↑
+        </a>
+      </div>
+    ))
+  }
+</div>
+
+<style>
+  .top-lists-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+  .jump-menu {
+    background: white;
+    border: 1px solid #f3f4f6;
+    padding: 1rem;
+    border-radius: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .menu-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    margin: 0;
+  }
+  .menu-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .menu-links a {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #2563eb;
+    text-decoration: none;
+    background: #eff6ff;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.5rem;
+  }
+  .menu-links a:hover {
+    background: #dbeafe;
+  }
+
+  .back-to-top-container {
+    text-align: right;
+    margin-top: -1rem;
+    margin-bottom: 1rem;
+  }
+
+  .back-to-top {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .back-to-top:hover {
+    color: #2563eb;
+  }
+
+  .table-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 1.5rem;
+    overflow: hidden;
+    scroll-margin-top: 2rem;
+  }
+  .table-container {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .table-header-box {
+    padding: 1.5rem 1.5rem 0 1.5rem;
+  }
+  .card-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  .data-table th,
+  .data-table td {
+    padding: 1rem 1.25rem;
+    border: 1px solid #e5e7eb;
+  }
+  .data-table th {
+    text-align: left;
+    background: #f9fafb;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .data-table tr:nth-child(even) {
+    background-color: #fafafa;
+  }
+  .text-right {
+    text-align: right;
+  }
+  .text-muted {
+    color: var(--text-muted);
+  }
+  .font-medium {
+    font-weight: 500;
+  }
+  .font-bold {
+    font-weight: 700;
+  }
+
+  @media (max-width: 640px) {
+    .data-table {
+      font-size: 0.75rem;
+    }
+    .data-table th,
+    .data-table td {
+      padding: 0.75rem 0.5rem;
+    }
+  }
+</style>

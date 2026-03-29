@@ -1,10 +1,19 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import TopLists from '../components/TopLists.astro';
+
+// Check for user state from middleware (src/middleware.ts)
+const user = Astro.locals.user;
+
+// Server-side protection: Redirect to login if not authenticated
+if (!user) {
+  return Astro.redirect('/login');
+}
 ---
 
 <Layout
   title="Top Lists"
-  description="Leaderboards and top-performing athletes."
+  description="Detailed event leaderboards and community records."
 >
-  <div class="py-20 text-center text-gray-400">Leaderboards coming soon...</div>
+  <TopLists />
 </Layout>
