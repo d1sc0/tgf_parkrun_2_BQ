@@ -1,4 +1,9 @@
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import {
+  initializeApp,
+  getApps,
+  cert,
+  type AppOptions,
+} from 'firebase-admin/app';
 import path from 'node:path';
 
 /**
@@ -7,10 +12,14 @@ import path from 'node:path';
  * For Firebase App Hosting, it automatically uses ADC.
  */
 if (!getApps().length) {
-  // Use process.env for reliable access to system variables in production SSR
-  const keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  // Check both process.env (Production) and import.meta.env (Local Dev)
+  const keyFilename =
+    process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+    import.meta.env.GOOGLE_APPLICATION_CREDENTIALS;
   const projectId =
-    process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    process.env.GCP_PROJECT_ID ||
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    import.meta.env.GCP_PROJECT_ID;
 
   if (!projectId) {
     console.error(
@@ -18,8 +27,9 @@ if (!getApps().length) {
     );
   }
 
-  initializeApp({
-    projectId,
-    ...(keyFilename ? { credential: cert(path.resolve(keyFilename)) } : {}),
-  });
+  const options: AppOptions = {};
+  if (projectId) options.projectId = projectId;
+  if (keyFilename) options.credential = cert(path.resolve(keyFilename));
+
+  initializeApp(options);
 }
