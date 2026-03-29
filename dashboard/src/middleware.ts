@@ -8,12 +8,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (sessionCookie) {
     try {
       const auth = getAuth();
-      // Verify the session cookie. The second parameter 'true' checks if the
-      // user has been disabled or had their session revoked.
-      const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
+      // Verify the session cookie.
+      // Note: Setting the second parameter to 'true' (checkRevoked) requires the
+      // App Hosting service account to have the 'Firebase Authentication Admin' role.
+      // We'll set it to false temporarily to verify if IAM permissions are the bottleneck.
+      const decodedClaims = await auth.verifySessionCookie(
+        sessionCookie,
+        false,
+      );
       context.locals.user = decodedClaims;
     } catch (error) {
-      // If invalid or expired, clear the cookie
+      console.error('Firebase Auth Middleware Error:', error);
+      // If invalid, expired, or permission error, clear the cookie
       context.cookies.delete('__session', { path: '/' });
     }
   }
