@@ -9,18 +9,31 @@ const datasetId = import.meta.env.BIGQUERY_DATASET_ID || 'parkrun_data';
  * and finds the next milestone in the sequence [10, 25, 50, 100, 250, 500].
  */
 const milestoneQuery = `
-  WITH VolunteerCounts AS (
+  WITH VolunteerSummary AS (
     SELECT
       athlete_id,
       ANY_VALUE(first_name) as first_name,
       ANY_VALUE(last_name) as last_name,
-      COUNT(DISTINCT event_date) as current_count,
+      COUNT(DISTINCT event_date) as vol_table_count,
       MAX(event_date) as last_vol_date,
       ARRAY_AGG(run_id ORDER BY event_date DESC LIMIT 1)[OFFSET(0)] as last_run_id
     FROM \`${projectId}.${datasetId}.volunteers\`
     WHERE athlete_id IS NOT NULL AND athlete_id != 2214
     GROUP BY athlete_id
-    HAVING current_count > 5
+  ),
+  ResultSummary AS (
+    SELECT athlete_id, MAX(vol_count) as highest_vol_results
+    FROM \`${projectId}.${datasetId}.results\`
+    WHERE athlete_id IS NOT NULL AND athlete_id != 2214
+    GROUP BY athlete_id
+  ),
+  VolunteerCounts AS (
+    SELECT
+      v.*,
+      GREATEST(v.vol_table_count, IFNULL(r.highest_vol_results, 0)) as current_count
+    FROM VolunteerSummary v
+    LEFT JOIN ResultSummary r ON v.athlete_id = r.athlete_id
+    WHERE GREATEST(v.vol_table_count, IFNULL(r.highest_vol_results, 0)) > 5
   ),
   Milestones AS (
     SELECT m FROM UNNEST([10, 25, 50, 100, 250, 500]) AS m
@@ -56,10 +69,29 @@ try {
 
 <div class="milestone-container">
   <div class="card-header">
-    <h3 class="card-title">Approaching Milestones</h3>
-    <p class="card-subtitle">
-      Volunteers sorted by credits remaining until their next milestone.
-    </p>
+    <h3 class="card-title">Volunteer Milestone Tracker</h3>
+    <div class="search-form-group">
+      <input
+        type="text"
+        id="milestone-search"
+        list="volunteer-names"
+        placeholder="Search by name or athlete ID..."
+        class="search-input"
+        autocomplete="off"
+      />
+      <button type="button" id="filter-button" class="filter-btn" title="Apply filter">
+        Filter
+      </button>
+      <button type="button" id="clear-filter-button" class="clear-filter-btn" title="Reset search"
+        >Clear Filter</button
+      >
+      <datalist id="volunteer-names">
+        {volunteers.map(v => (
+          <option value={`${v.first_name} ${v.last_name}`} />
+          <option value={`A${v.athlete_id}`} />
+        ))}
+      </datalist>
+    </div>
   </div>
 
   <div class="table-wrapper">
@@ -68,12 +100,16 @@ try {
         <table class="milestone-table">
           <thead>
             <tr>
-              <th>Volunteer</th>
-              <th>Current Count</th>
-              <th>Last Vol</th>
-              <th>Next Milestone</th>
-              <th>Remaining</th>
-              <th class="progress-col">Progress</th>
+              <th data-sort="name">Volunteer</th>
+              <th data-sort="count">Current Count</th>
+              <th data-sort="date" data-dir="desc" class="sort-desc">
+                Last Vol
+              </th>
+              <th data-sort="milestone">Next Milestone</th>
+              <th data-sort="remaining">Remaining</th>
+              <th data-sort="progress" class="progress-col">
+                Progress
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -81,16 +117,30 @@ try {
               const progressPct = Math.round(
                 (row.current_count / row.next_milestone) * 100,
               );
+              const dateValue =
+                row.last_vol_date instanceof Date
+                  ? row.last_vol_date.toISOString().split('T')[0]
+                  : row.last_vol_date?.value || row.last_vol_date || '';
+
               return (
                 <tr>
-                  <td>
+                  <td
+                    data-col="name"
+                    data-value={`${row.first_name} ${row.last_name}`}
+                  >
                     <span class="volunteer-name">
                       {row.first_name} {row.last_name}
                     </span>
                     <span class="volunteer-id">A{row.athlete_id}</span>
                   </td>
-                  <td class="count-cell">{row.current_count}</td>
-                  <td class="date-cell">
+                  <td
+                    data-col="count"
+                    data-value={row.current_count}
+                    class="count-cell"
+                  >
+                    {row.current_count}
+                  </td>
+                  <td data-col="date" data-value={dateValue} class="date-cell">
                     {(() => {
                       const d = row.last_vol_date;
                       if (!d) return '-';
@@ -104,17 +154,27 @@ try {
                       <span class="run-id-tag"> (#{row.last_run_id})</span>
                     )}
                   </td>
-                  <td class="milestone-cell">
+                  <td
+                    data-col="milestone"
+                    data-value={row.next_milestone}
+                    class="milestone-cell"
+                  >
                     <span class={`milestone-badge m-${row.next_milestone}`}>
                       {row.next_milestone}
                     </span>
                   </td>
                   <td
+                    data-col="remaining"
+                    data-value={row.remaining}
                     class={`remaining-cell ${row.remaining <= 3 ? 'urgent' : ''}`}
                   >
                     {row.remaining} {row.remaining === 1 ? 'event' : 'events'}
                   </td>
-                  <td class="progress-cell">
+                  <td
+                    data-col="progress"
+                    data-value={progressPct}
+                    class="progress-cell"
+                  >
                     <div class="progress-bar-bg">
                       <div
                         class="progress-bar-fill"
@@ -134,6 +194,115 @@ try {
     }
   </div>
 </div>
+
+<script>
+  /**
+   * Unified initialization for sorting and filtering.
+   * Handles both initial load and Astro View Transitions.
+   */
+  function initMilestoneFeatures() {
+    const table = document.querySelector('.milestone-table');
+    const searchInput = document.getElementById('milestone-search') as HTMLInputElement;
+    const filterBtn = document.getElementById('filter-button');
+    const clearFilterBtn = document.getElementById('clear-filter-button');
+
+    if (!table || !searchInput || !filterBtn || !clearFilterBtn) return;
+
+    const tbody = table.querySelector('tbody');
+    if (!tbody) {
+      return;
+    }
+
+    // Check if listeners are already attached to prevent duplicates
+    if (searchInput.dataset.listenersAttached === 'true') {
+      console.log('Milestone features already initialized, skipping re-attachment.');
+      return;
+    }
+    searchInput.dataset.listenersAttached = 'true'; // Mark as attached
+
+    // --- Filtering Logic ---
+    const runFilter = () => {
+      const query = searchInput.value.toLowerCase().trim();
+      const rows = tbody.querySelectorAll('tr');
+      rows.forEach(row => {
+        const nameCell = row.querySelector('[data-col="name"]') as HTMLElement;
+        const text = nameCell?.textContent?.toLowerCase() || '';
+        (row as HTMLElement).style.display = text.includes(query) ? '' : 'none';
+      });
+    };
+
+    // Filter listeners
+    filterBtn.addEventListener('click', runFilter);
+    
+    clearFilterBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      runFilter();
+      searchInput.focus();
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        runFilter();
+      }
+    });
+
+    // --- Sorting Logic ---
+    const headers = table.querySelectorAll('th[data-sort]') as NodeListOf<HTMLElement>;
+
+    headers.forEach(header => {
+      header.addEventListener('click', () => {
+        const sortKey = header.dataset.sort || '';
+        const currentDir = header.dataset.dir || 'asc';
+
+        // Toggle direction or set default for new column
+        const newDir =
+          header.classList.contains('sort-asc') ||
+          header.classList.contains('sort-desc')
+            ? currentDir === 'asc'
+              ? 'desc'
+              : 'asc'
+            : sortKey === 'date' || sortKey === 'count'
+              ? 'desc'
+              : 'asc';
+
+        headers.forEach(otherH => {
+          (otherH as HTMLElement).classList.remove('sort-asc', 'sort-desc');
+          delete (otherH as HTMLElement).dataset.dir; // Clear direction for other headers
+        });
+
+        header.classList.add(newDir === 'asc' ? 'sort-asc' : 'sort-desc');
+        header.dataset.dir = newDir;
+
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.sort((a, b) => {
+          const aCell = a.querySelector(
+            `td[data-col="${sortKey}"]`,
+          ) as HTMLElement | null;
+          const bCell = b.querySelector(
+            `td[data-col="${sortKey}"]`,
+          ) as HTMLElement | null;
+          const aVal = aCell?.dataset.value || '';
+          const bVal = bCell?.dataset.value || '';
+          const aNum = parseFloat(aVal);
+          const bNum = parseFloat(bVal);
+
+          if (!isNaN(aNum) && !isNaN(bNum)) {
+            return newDir === 'asc' ? aNum - bNum : bNum - aNum;
+          }
+          return newDir === 'asc'
+            ? aVal.localeCompare(bVal)
+            : bVal.localeCompare(aVal);
+        });
+
+        tbody.append(...rows);
+      });
+    });
+  }
+
+  initMilestoneFeatures();
+  document.addEventListener('astro:page-load', initMilestoneFeatures);
+</script>
 
 <style>
   .milestone-container {
@@ -159,6 +328,65 @@ try {
     margin: 0.25rem 0 0 0;
   }
 
+  .search-form-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .search-input {
+    flex: 1; /* Allows the input to grow */
+    min-width: 320px; /* Widened to make it more prominent */
+    padding: 0.625rem 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid #d1d5db;
+    font-size: 0.875rem;
+    background: #f9fafb;
+    transition:
+      border-color 0.2s,
+      box-shadow 0.2s;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    background: white;
+  }
+
+  .filter-btn,
+  .clear-filter-btn {
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+    white-space: nowrap; /* Prevent buttons from wrapping text */
+  }
+
+  .filter-btn {
+    background: #2563eb;
+    color: white;
+  }
+
+  .filter-btn:hover {
+    background: #1d4ed8;
+  }
+
+  .clear-filter-btn {
+    background: white;
+    border-color: #d1d5db;
+    color: #6b7280;
+  }
+
+  .clear-filter-btn:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+  }
+
   .table-wrapper {
     overflow-x: auto;
   }
@@ -169,14 +397,44 @@ try {
   }
   .milestone-table th {
     background: #f9fafb;
-    padding: 0.75rem 1rem;
+    padding: 0.75rem 1.75rem 0.75rem 1rem;
     text-align: left;
     font-weight: 700;
     color: #6b7280;
     text-transform: uppercase;
     font-size: 0.75rem;
     letter-spacing: 0.05em;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    transition: background-color 0.2s;
   }
+
+  .milestone-table th:hover {
+    background: #f3f4f6;
+  }
+
+  .milestone-table th::after {
+    content: '↕';
+    position: absolute;
+    right: 0.6rem;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0.4;
+    font-size: 0.8rem;
+  }
+
+  .milestone-table th.sort-asc::after {
+    content: '↑';
+    opacity: 1;
+    color: #2563eb;
+  }
+  .milestone-table th.sort-desc::after {
+    content: '↓';
+    opacity: 1;
+    color: #2563eb;
+  }
+
   .milestone-table td {
     padding: 1rem;
     border-bottom: 1px solid #f3f4f6;
