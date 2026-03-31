@@ -96,6 +96,56 @@ const firsts = data?.first_finishers || [];
 const milestones = data?.milestones || [];
 const dist = data?.distribution || [];
 
+// Weather Fetching Logic (Open-Meteo)
+let weather = null;
+const wDate =
+  latest.event_date instanceof Date
+    ? latest.event_date
+    : new Date(latest.event_date?.value || latest.event_date);
+
+if (!isNaN(wDate.getTime())) {
+  const dateStr = wDate.toISOString().split('T')[0];
+  try {
+    const wRes = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=50.7123&longitude=-2.4651&start_date=${dateStr}&end_date=${dateStr}&hourly=temperature_2m,weather_code,wind_speed_10m&wind_speed_unit=mph&timezone=GMT`,
+    );
+    const wData = await wRes.json();
+    if (wData.hourly && wData.hourly.temperature_2m) {
+      weather = {
+        temp: wData.hourly.temperature_2m[9], // 09:00 GMT
+        code: wData.hourly.weather_code[9],
+        wind: wData.hourly.wind_speed_10m[9],
+      };
+    }
+  } catch (e) {
+    console.error('Weather fetch failed:', e);
+  }
+}
+
+const weatherCodes = {
+  0: { label: 'Sunny', icon: '☀️' },
+  1: { label: 'Mostly Clear', icon: '🌤️' },
+  2: { label: 'Partly Cloudy', icon: '⛅' },
+  3: { label: 'Cloudy', icon: '☁️' },
+  45: { label: 'Foggy', icon: '🌫️' },
+  48: { label: 'Foggy', icon: '🌫️' },
+  51: { label: 'Drizzle', icon: '🌦️' },
+  53: { label: 'Drizzle', icon: '🌦️' },
+  55: { label: 'Drizzle', icon: '🌦️' },
+  61: { label: 'Light Rain', icon: '🌧️' },
+  63: { label: 'Rain', icon: '🌧️' },
+  65: { label: 'Heavy Rain', icon: '🌧️' },
+  71: { label: 'Slight Snow', icon: '❄️' },
+  73: { label: 'Snow', icon: '❄️' },
+  75: { label: 'Heavy Snow', icon: '❄️' },
+  80: { label: 'Showers', icon: '🌦️' },
+  81: { label: 'Showers', icon: '🌦️' },
+  82: { label: 'Heavy Showers', icon: '⛈️' },
+};
+const weatherInfo = weather
+  ? weatherCodes[weather.code] || { label: 'Unknown', icon: '🌡️' }
+  : null;
+
 const getTrend = (curr, old) => {
   if (old === undefined || old === null)
     return { val: 0, icon: '−', color: 'neutral' };
@@ -201,9 +251,50 @@ const chartData = dist.map(d => d.count);
         </span>
       </div>
     </div>
+
+    <div class="stat-card ff-card">
+      <h3 class="card-title">First Finishers</h3>
+      <div class="first-finishers-list">
+        {
+          firsts.map(f => (
+            <div class="ff-item">
+              <div class="ff-meta">
+                <span class="ff-gender">{f.gender}</span>
+                <span class="ff-name">
+                  {f.first_name} {f.last_name}
+                </span>
+              </div>
+              <div class="ff-stats">
+                <span class="ff-time">{f.finish_time}</span>
+                <span class="ff-grading">{f.age_grading?.toFixed(1)}%</span>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+
+    <div class="stat-card weather-card">
+      <span class="stat-label">Weather at 09:00</span>
+      <div class="stat-main">
+        <span class="stat-value">
+          {weather ? `${Math.round(weather.temp)}°C` : 'N/A'}
+          <span class="weather-icon">{weatherInfo?.icon}</span>
+        </span>
+
+        <span class="trend-tag neutral">
+          {weather ? weatherInfo?.label : '-'}
+        </span>
+      </div>
+      {
+        weather && (
+          <span class="weather-sub">Wind: {Math.round(weather.wind)} mph</span>
+        )
+      }
+    </div>
   </div>
 
-  <div class="main-grid">
+  <div class="report-content">
     <div class="content-card chart-card">
       <h3 class="card-title">Finish Time Distribution</h3>
       <div class="canvas-wrapper">
@@ -211,48 +302,24 @@ const chartData = dist.map(d => d.count);
       </div>
     </div>
 
-    <div class="side-col">
-      <div class="content-card">
-        <h3 class="card-title">First Finishers</h3>
-        <div class="first-finishers-list">
-          {
-            firsts.map(f => (
-              <div class="ff-item">
-                <div class="ff-meta">
-                  <span class="ff-gender">{f.gender}</span>
-                  <span class="ff-name">
-                    {f.first_name} {f.last_name}
-                  </span>
-                </div>
-                <div class="ff-stats">
-                  <span class="ff-time">{f.finish_time}</span>
-                  <span class="ff-grading">{f.age_grading?.toFixed(1)}%</span>
-                </div>
-              </div>
-            ))
-          }
-        </div>
-      </div>
-
-      <div class="content-card">
-        <h3 class="card-title">Milestones Today</h3>
-        {
-          milestones.length > 0 ? (
-            <ul class="milestone-list">
-              {milestones.map(m => (
-                <li>
-                  <strong>
-                    {m.first_name} {m.last_name}
-                  </strong>
-                  <span class={`badge m-${m.run_total}`}>{m.run_total}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p class="empty-state">No run milestones today.</p>
-          )
-        }
-      </div>
+    <div class="content-card">
+      <h3 class="card-title">Milestones Today</h3>
+      {
+        milestones.length > 0 ? (
+          <ul class="milestone-list">
+            {milestones.map(m => (
+              <li>
+                <strong>
+                  {m.first_name} {m.last_name}
+                </strong>
+                <span class={`badge m-${m.run_total}`}>{m.run_total}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="empty-state">No run milestones today.</p>
+        )
+      }
     </div>
   </div>
 </div>
@@ -330,7 +397,7 @@ const chartData = dist.map(d => d.count);
 
   .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: 1rem;
   }
 
@@ -384,19 +451,39 @@ const chartData = dist.map(d => d.count);
     color: #6b7280;
   }
 
-  .main-grid {
-    display: grid;
-    grid-template-columns: 1fr;
+  .report-content {
+    display: flex;
+    flex-direction: column;
     gap: 1.5rem;
   }
 
   @media (min-width: 1024px) {
-    .main-grid {
-      grid-template-columns: 2fr 1fr;
-    }
     .stats-grid {
       grid-template-columns: repeat(3, 1fr);
     }
+    .weather-card,
+    .ff-card {
+      grid-column: span 3;
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .weather-card,
+    .ff-card {
+      grid-column: span 2;
+    }
+  }
+
+  .weather-icon {
+    font-size: 1.25rem;
+    margin-left: 0.5rem;
+  }
+
+  .weather-sub {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-top: -0.25rem;
   }
 
   .content-card {
@@ -419,12 +506,6 @@ const chartData = dist.map(d => d.count);
   .canvas-wrapper {
     height: 300px;
     position: relative;
-  }
-
-  .side-col {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
   }
 
   .first-finishers-list {
