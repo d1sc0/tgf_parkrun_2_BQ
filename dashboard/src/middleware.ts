@@ -41,7 +41,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     context.url.pathname.startsWith('/top-lists') ||
     context.url.pathname.startsWith('/records') ||
     context.url.pathname.startsWith('/visitors-map') ||
-    context.url.pathname.startsWith('/volunteer-milestones');
+    context.url.pathname.startsWith('/volunteer-milestones') ||
+    context.url.pathname.startsWith('/run-report');
 
   if (isProtected && !context.locals.user) {
     return context.redirect('/login');

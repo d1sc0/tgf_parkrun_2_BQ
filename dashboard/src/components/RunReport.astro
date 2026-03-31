@@ -1,0 +1,493 @@
+---
+import { runQuery } from '../lib/bigquery';
+
+const projectId = import.meta.env.GCP_PROJECT_ID;
+const datasetId = import.meta.env.BIGQUERY_DATASET_ID || 'parkrun_data';
+
+/**
+ * This query fetches stats for the latest run and compares them to the previous run.
+ * It calculates: Finishers, Volunteers, New Parkrunners (RunTotal=1), and PBs.
+ */
+const reportQuery = `
+  WITH LatestRuns AS (
+    SELECT run_id, event_date 
+    FROM \`${projectId}.${datasetId}.results\` 
+    GROUP BY 1, 2 
+    ORDER BY event_date DESC 
+    LIMIT 2
+  ),
+  RunMetrics AS (
+    SELECT
+      r.run_id,
+      ANY_VALUE(r.event_date) as event_date,
+      COUNT(*) as finishers,
+      COUNTIF(r.run_total = 1) as newcomers,
+      COUNTIF(r.was_genuine_pb = true) as pbs,
+      COUNTIF(r.is_unknown_athlete = true) as unknowns,
+      (SELECT COUNT(DISTINCT athlete_id) FROM \`${projectId}.${datasetId}.volunteers\` v WHERE v.run_id = r.run_id) as volunteers
+    FROM \`${projectId}.${datasetId}.results\` r
+    WHERE r.run_id IN (SELECT run_id FROM LatestRuns)
+    GROUP BY 1
+  ),
+  FirstFinishers AS (
+    SELECT 
+      run_id,
+      first_name,
+      last_name,
+      finish_time,
+      age_grading,
+      CASE 
+        WHEN age_category LIKE 'M%' OR age_category LIKE 'JM%' OR age_category LIKE 'SM%' OR age_category LIKE 'VM%' THEN 'Male'
+        ELSE 'Female'
+      END as gender,
+      ROW_NUMBER() OVER (PARTITION BY run_id, 
+        CASE 
+          WHEN age_category LIKE 'M%' OR age_category LIKE 'JM%' OR age_category LIKE 'SM%' OR age_category LIKE 'VM%' THEN 'Male'
+          ELSE 'Female'
+        END 
+        ORDER BY finish_position ASC) as rn
+    FROM \`${projectId}.${datasetId}.results\`
+    WHERE run_id = (SELECT MAX(run_id) FROM LatestRuns)
+  ),
+  Milestones AS (
+    SELECT 
+      first_name, last_name, athlete_id, run_total
+    FROM \`${projectId}.${datasetId}.results\`
+    WHERE run_id = (SELECT MAX(run_id) FROM LatestRuns)
+      AND run_total IN (10, 25, 50, 100, 250, 500)
+  ),
+  Distribution AS (
+    SELECT 
+      CAST(FLOOR(
+        CASE
+          WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 3 THEN
+            CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64) * 60 + CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64)
+          WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 2 THEN
+            CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64)
+          ELSE 0
+        END
+      ) AS INT64) as minute_bucket,
+      COUNT(*) as count
+    FROM \`${projectId}.${datasetId}.results\`
+    WHERE run_id = (SELECT MAX(run_id) FROM LatestRuns)
+      AND finish_time IS NOT NULL AND finish_time != ''
+    GROUP BY 1
+  )
+  SELECT 
+    (SELECT AS STRUCT * FROM RunMetrics WHERE run_id = (SELECT MAX(run_id) FROM LatestRuns)) as latest,
+    (SELECT AS STRUCT * FROM RunMetrics WHERE run_id = (SELECT MIN(run_id) FROM LatestRuns)) as previous,
+    ARRAY(SELECT AS STRUCT * FROM FirstFinishers WHERE rn = 1) as first_finishers,
+    ARRAY(SELECT AS STRUCT * FROM Milestones ORDER BY run_total DESC) as milestones,
+    ARRAY(SELECT AS STRUCT * FROM Distribution ORDER BY minute_bucket ASC) as distribution
+`;
+
+let data = null;
+try {
+  const results = await runQuery(reportQuery);
+  data = results[0];
+} catch (e) {
+  console.error('Run Report Error:', e);
+}
+
+const latest = data?.latest || {};
+const prev = data?.previous || {};
+const firsts = data?.first_finishers || [];
+const milestones = data?.milestones || [];
+const dist = data?.distribution || [];
+
+const getTrend = (curr, old) => {
+  if (!old) return { val: 0, icon: '−', color: 'neutral' };
+  const diff = curr - old;
+  if (diff > 0) return { val: diff, icon: '↑', color: 'up' };
+  if (diff < 0) return { val: Math.abs(diff), icon: '↓', color: 'down' };
+  return { val: 0, icon: '−', color: 'neutral' };
+};
+
+const trends = {
+  finishers: getTrend(latest.finishers, prev.finishers),
+  volunteers: getTrend(latest.volunteers, prev.volunteers),
+  newcomers: getTrend(latest.newcomers, prev.newcomers),
+  pbs: getTrend(latest.pbs, prev.pbs),
+  unknowns: getTrend(latest.unknowns, prev.unknowns),
+};
+
+const chartLabels = dist.map(d => `${d.minute_bucket}:00`);
+const chartData = dist.map(d => d.count);
+---
+
+<div class="report-container">
+  <header class="report-header">
+    <h2 class="section-title">Event #{latest.run_id} Report</h2>
+    <p class="event-date">
+      {
+        latest.event_date instanceof Date
+          ? latest.event_date.toLocaleDateString('en-GB', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            })
+          : latest.event_date?.value || 'Unknown Date'
+      }
+    </p>
+  </header>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span class="stat-label">Finishers</span>
+      <div class="stat-main">
+        <span class="stat-value">{latest.finishers || 0}</span>
+        <span class:list={['trend-tag', trends.finishers.color]}>
+          {trends.finishers.icon}
+          {trends.finishers.val}
+        </span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <span class="stat-label">Volunteers</span>
+      <div class="stat-main">
+        <span class="stat-value">{latest.volunteers || 0}</span>
+        <span class:list={['trend-tag', trends.volunteers.color]}>
+          {trends.volunteers.icon}
+          {trends.volunteers.val}
+        </span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <span class="stat-label">New parkrunners</span>
+      <div class="stat-main">
+        <span class="stat-value">{latest.newcomers || 0}</span>
+        <span class:list={['trend-tag', trends.newcomers.color]}>
+          {trends.newcomers.icon}
+          {trends.newcomers.val}
+        </span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <span class="stat-label">Unknowns</span>
+      <div class="stat-main">
+        <span class="stat-value">{latest.unknowns || 0}</span>
+        <span class:list={['trend-tag', trends.unknowns.color]}>
+          {trends.unknowns.icon}
+          {trends.unknowns.val}
+        </span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <span class="stat-label">PBs Achieved</span>
+      <div class="stat-main">
+        <span class="stat-value">{latest.pbs || 0}</span>
+        <span class:list={['trend-tag', trends.pbs.color]}>
+          {trends.pbs.icon}
+          {trends.pbs.val}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="content-card chart-card">
+      <h3 class="card-title">Finish Time Distribution</h3>
+      <div class="canvas-wrapper">
+        <canvas id="distributionChart"></canvas>
+      </div>
+    </div>
+
+    <div class="side-col">
+      <div class="content-card">
+        <h3 class="card-title">First Finishers</h3>
+        <div class="first-finishers-list">
+          {
+            firsts.map(f => (
+              <div class="ff-item">
+                <div class="ff-meta">
+                  <span class="ff-gender">{f.gender}</span>
+                  <span class="ff-name">
+                    {f.first_name} {f.last_name}
+                  </span>
+                </div>
+                <div class="ff-stats">
+                  <span class="ff-time">{f.finish_time}</span>
+                  <span class="ff-grading">{f.age_grading?.toFixed(1)}%</span>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      <div class="content-card">
+        <h3 class="card-title">Milestones Today</h3>
+        {
+          milestones.length > 0 ? (
+            <ul class="milestone-list">
+              {milestones.map(m => (
+                <li>
+                  <strong>
+                    {m.first_name} {m.last_name}
+                  </strong>
+                  <span class={`badge m-${m.run_total}`}>{m.run_total}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="empty-state">No run milestones today.</p>
+          )
+        }
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script define:vars={{ chartLabels, chartData }}>
+  function initChart() {
+    const ctx = document.getElementById('distributionChart');
+    if (!ctx) return;
+
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: chartLabels,
+        datasets: [
+          {
+            label: 'Finishers',
+            data: chartData,
+            backgroundColor: '#3b82f6',
+            borderRadius: 4,
+            barPercentage: 0.8,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, grid: { display: false } },
+          x: { grid: { display: false } },
+        },
+      },
+    });
+  }
+  initChart();
+  document.addEventListener('astro:page-load', initChart);
+</script>
+
+<style>
+  .report-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .report-header {
+    margin-bottom: 0.5rem;
+  }
+
+  .section-title {
+    font-size: 1.875rem;
+    font-weight: 900;
+    color: var(--text-main);
+    margin: 0;
+  }
+
+  .event-date {
+    color: var(--text-muted);
+    font-weight: 600;
+    margin: 0.25rem 0 0 0;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+
+  .stat-card {
+    background: white;
+    padding: 1.25rem;
+    border-radius: 1.25rem;
+    border: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+  }
+
+  .stat-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: var(--text-main);
+  }
+
+  .trend-tag {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.5rem;
+  }
+
+  .trend-tag.up {
+    background: #ecfdf5;
+    color: #059669;
+  }
+  .trend-tag.down {
+    background: #fef2f2;
+    color: #dc2626;
+  }
+  .trend-tag.neutral {
+    background: #f9fafb;
+    color: #6b7280;
+  }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  @media (min-width: 1024px) {
+    .main-grid {
+      grid-template-columns: 2fr 1fr;
+    }
+  }
+
+  .content-card {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 1.5rem;
+    border: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .card-title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--text-main);
+    margin: 0;
+  }
+
+  .canvas-wrapper {
+    height: 300px;
+    position: relative;
+  }
+
+  .side-col {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .first-finishers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .ff-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .ff-meta {
+    display: flex;
+    flex-direction: column;
+  }
+  .ff-gender {
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .ff-name {
+    font-weight: 700;
+    color: var(--text-main);
+  }
+
+  .ff-stats {
+    display: flex;
+    flex-direction: column;
+    text-align: right;
+  }
+  .ff-time {
+    font-weight: 800;
+    color: #059669;
+  }
+  .ff-grading {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .milestone-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .milestone-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: white;
+  }
+
+  .m-10 {
+    background: #6b7280;
+  }
+  .m-25 {
+    background: #7c3aed;
+  }
+  .m-50 {
+    background: #ef4444;
+  }
+  .m-100 {
+    background: #111827;
+  }
+  .m-250 {
+    background: #10b981;
+  }
+  .m-500 {
+    background: #3b82f6;
+  }
+
+  .empty-state {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+</style>

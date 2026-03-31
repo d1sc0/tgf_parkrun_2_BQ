@@ -1,0 +1,19 @@
+---
+import Layout from '../layouts/Layout.astro';
+import RunReport from '../components/RunReport.astro';
+
+// Check for user state from middleware
+const user = Astro.locals.user;
+
+// Server-side protection
+if (!user) {
+  return Astro.redirect('/login');
+}
+---
+
+<Layout
+  title="Latest Run Report"
+  description="Detailed breakdown of the most recent event"
+>
+  <RunReport />
+</Layout>
