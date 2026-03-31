@@ -46,6 +46,13 @@ const user = Astro.locals.user;
           user && (
             <li>
               <a href="/top-lists">Top Lists</a>
+              <a href="/records">Records</a>
+            </li>
+          )
+        }
+        {
+          !user && (
+            <li>Top Lists</a>
             </li>
           )
         }
