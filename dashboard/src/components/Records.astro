@@ -1,0 +1,418 @@
+---
+import { runQuery } from '../lib/bigquery';
+
+const projectId = import.meta.env.GCP_PROJECT_ID;
+const datasetId = import.meta.env.BIGQUERY_DATASET_ID || 'parkrun_data';
+
+// 1. Fetch all unique age categories for the filter dropdown
+const categoriesQuery = `
+  SELECT DISTINCT age_category
+  FROM \`${projectId}.${datasetId}.results\`
+  WHERE age_category IS NOT NULL
+  ORDER BY age_category
+`;
+
+const categoriesRows = await runQuery(categoriesQuery);
+const categories = categoriesRows?.map(r => r.age_category) || [];
+
+// 2. Get the selected category from the URL, default to the first one available
+const selectedCategory =
+  Astro.url.searchParams.get('category') ||
+  (categories.length > 0 ? categories[0] : '');
+
+// 3. Base SQL logic for identifying Personal Bests (PBs)
+// This CTE calculates the fastest time for every athlete ever recorded
+const pbSecondsLogic = `
+  CASE
+    WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 3 THEN
+      CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64) * 3600 +
+      CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64) * 60 +
+      CAST(SPLIT(finish_time, ':')[OFFSET(2)] AS INT64)
+    WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 2 THEN
+      CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64) * 60 +
+      CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64)
+    ELSE 999999
+  END
+`;
+
+const basePbCte = `
+    SELECT
+      athlete_id,
+      first_name,
+      last_name,
+      finish_time as pb_time,
+      ${pbSecondsLogic} as pb_seconds,
+      age_grading as best_grading,
+      event_date as pb_date,
+      run_id,
+      age_category,
+      ROW_NUMBER() OVER (PARTITION BY athlete_id ORDER BY 
+        ${pbSecondsLogic} ASC, event_date ASC
+      ) as pb_rn
+    FROM \`${projectId}.${datasetId}.results\`
+    WHERE is_unknown_athlete = false
+      AND finish_time IS NOT NULL AND finish_time != ''
+`;
+
+// 4. Define specific queries for each table
+const overallFastestQuery = `
+  WITH AthletePBs AS (${basePbCte})
+  SELECT
+    *,
+    ROW_NUMBER() OVER (ORDER BY pb_seconds ASC) as rank
+  FROM AthletePBs
+  WHERE pb_rn = 1
+  ORDER BY rank ASC
+  LIMIT 10
+`;
+
+const maleFastestQuery = `
+  WITH AthletePBs AS (${basePbCte})
+  SELECT
+    *,
+    ROW_NUMBER() OVER (ORDER BY pb_seconds ASC) as rank
+  FROM AthletePBs
+  WHERE pb_rn = 1 
+    AND (age_category LIKE 'M%' OR age_category LIKE 'JM%' OR age_category LIKE 'SM%' OR age_category LIKE 'VM%')
+  ORDER BY rank ASC
+  LIMIT 10
+`;
+
+const femaleFastestQuery = `
+  WITH AthletePBs AS (${basePbCte})
+  SELECT
+    *,
+    ROW_NUMBER() OVER (ORDER BY pb_seconds ASC) as rank
+  FROM AthletePBs
+  WHERE pb_rn = 1 
+    AND (age_category LIKE 'W%' OR age_category LIKE 'JW%' OR age_category LIKE 'SW%' OR age_category LIKE 'VW%')
+  ORDER BY rank ASC
+  LIMIT 10
+`;
+
+const categoryFastestQuery = `
+  WITH AthletePBs AS (${basePbCte})
+  SELECT
+    *,
+    ROW_NUMBER() OVER (ORDER BY pb_seconds ASC) as rank
+  FROM AthletePBs
+  WHERE pb_rn = 1 AND age_category = @category
+  ORDER BY rank ASC
+  LIMIT 10
+`;
+
+const [overallRecords, maleRecords, femaleRecords, categoryRecords] =
+  await Promise.all([
+    runQuery(overallFastestQuery),
+    runQuery(maleFastestQuery),
+    runQuery(femaleFastestQuery),
+    runQuery(categoryFastestQuery, { category: selectedCategory }),
+  ]);
+
+const sections = [
+  { id: 'overall', title: 'Top 10 Overall Fastest', data: overallRecords },
+  { id: 'male', title: 'Top 10 Fastest Male', data: maleRecords },
+  { id: 'female', title: 'Top 10 Fastest Female', data: femaleRecords },
+  {
+    id: 'category',
+    title: 'Age Category Records',
+    data: categoryRecords,
+    hasFilter: true,
+  },
+];
+---
+
+<div class="records-container">
+  <div class="jump-menu" id="top">
+    <p class="menu-label">Jump to:</p>
+    <div class="menu-links">
+      {sections.map(section => <a href={`#${section.id}`}>{section.title}</a>)}
+    </div>
+  </div>
+
+  {
+    sections.map(section => (
+      <div class="section-group">
+        <div class="table-card" id={section.id}>
+          <div class="table-header-box">
+            <h3 class="card-title">{section.title}</h3>
+
+            {section.hasFilter && (
+              <div class="filter-bar">
+                <form method="GET" class="filter-form">
+                  <label for="category-select" class="filter-label">
+                    Drill down by Age Category:
+                  </label>
+                  <div class="select-wrapper">
+                    <select
+                      name="category"
+                      id="category-select"
+                      class="filter-select"
+                      onchange="this.form.submit()"
+                    >
+                      {categories.map(cat => (
+                        <option value={cat} selected={cat === selectedCategory}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <noscript>
+                    <button type="submit" class="submit-button">
+                      Filter
+                    </button>
+                  </noscript>
+                </form>
+              </div>
+            )}
+          </div>
+
+          <div class="table-wrapper">
+            {section.data.length > 0 ? (
+              <table class="records-table">
+                <thead>
+                  <tr>
+                    <th class="rank-col">#</th>
+                    <th>Athlete</th>
+                    <th>Time</th>
+                    <th class="grading-col">Grading</th>
+                    <th class="date-col">Date Achieved</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {section.data.map(row => (
+                    <tr>
+                      <td class="rank-cell">{row.rank}</td>
+                      <td>
+                        <span class="athlete-name">
+                          {row.first_name} {row.last_name}
+                        </span>
+                        <span class="athlete-id">A{row.athlete_id}</span>
+                      </td>
+                      <td class="time-cell">{row.pb_time}</td>
+                      <td class="grading-cell">
+                        {row.best_grading
+                          ? row.best_grading.toFixed(2) + '%'
+                          : '-'}
+                      </td>
+                      <td class="date-cell">
+                        {row.pb_date instanceof Date
+                          ? row.pb_date.toLocaleDateString('en-GB')
+                          : row.pb_date?.value || row.pb_date || '-'}
+                        {row.run_id && (
+                          <span class="run-id-tag"> (#{row.run_id})</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p class="no-data">No records found for this section.</p>
+            )}
+          </div>
+        </div>
+        <div class="back-to-top-container">
+          <a href="#top" class="back-to-top">
+            Back to top ↑
+          </a>
+        </div>
+      </div>
+    ))
+  }
+</div>
+
+<style>
+  .records-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  .section-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .jump-menu {
+    background: white;
+    border: 1px solid #e5e7eb;
+    padding: 1.25rem;
+    border-radius: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+  .menu-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    margin: 0;
+  }
+
+  .menu-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .menu-links a {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #2563eb;
+    text-decoration: none;
+    background: #eff6ff;
+    padding: 0.375rem 0.875rem;
+    border-radius: 0.5rem;
+    transition: background 0.2s;
+  }
+
+  .menu-links a:hover {
+    background: #dbeafe;
+  }
+
+  .table-card {
+    background: white;
+    border-radius: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    scroll-margin-top: 2rem;
+  }
+
+  .table-header-box {
+    padding: 1.5rem;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .card-title {
+    font-size: 1.125rem;
+    font-weight: 800;
+    color: var(--text-main);
+    margin: 0 0 1rem 0;
+  }
+
+  .filter-bar {
+    padding: 1rem;
+    border-radius: 0.75rem;
+    background: #f9fafb;
+    border: 1px solid #f3f4f6;
+  }
+
+  .filter-form {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .filter-label {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--text-muted, #6b7280);
+  }
+
+  .filter-select {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #d1d5db;
+    background: white;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    min-width: 180px;
+  }
+
+  .table-wrapper {
+    overflow-x: auto;
+  }
+
+  .records-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .records-table th {
+    background: #f9fafb;
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    color: var(--text-muted, #6b7280);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+  }
+
+  .records-table td {
+    padding: 1rem;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .rank-cell {
+    font-weight: 700;
+    color: var(--text-muted, #9ca3af);
+  }
+
+  .athlete-name {
+    display: block;
+    font-weight: 600;
+    color: var(--text-main, #111827);
+  }
+
+  .athlete-id {
+    font-size: 0.75rem;
+    color: var(--text-muted, #6b7280);
+  }
+
+  .run-id-tag {
+    font-size: 0.75rem;
+    color: var(--text-muted, #9ca3af);
+    font-weight: 500;
+  }
+
+  .time-cell {
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-weight: 700;
+    color: #059669;
+  }
+
+  .no-data {
+    padding: 2.5rem;
+    text-align: center;
+    color: var(--text-muted, #6b7280);
+  }
+
+  .back-to-top-container {
+    padding: 0 0.5rem;
+    text-align: right;
+  }
+
+  .back-to-top {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .back-to-top:hover {
+    color: #2563eb;
+  }
+
+  @media (max-width: 640px) {
+    .date-col,
+    .date-cell,
+    .grading-col,
+    .grading-cell {
+      display: none;
+    }
+  }
+</style>

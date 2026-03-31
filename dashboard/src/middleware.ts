@@ -37,7 +37,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   // Redirect logic for protected pages
-  const isProtected = context.url.pathname.startsWith('/top-lists');
+  const isProtected =
+    context.url.pathname.startsWith('/top-lists') ||
+    context.url.pathname.startsWith('/records');
 
   if (isProtected && !context.locals.user) {
     return context.redirect('/login');
