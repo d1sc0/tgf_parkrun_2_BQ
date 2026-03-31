@@ -2,19 +2,77 @@
 import Layout from '../layouts/Layout.astro';
 import HeadlineStats from '../components/HeadlineStats.astro';
 import HomeRunMap from '../components/HomeRunMap.astro';
+
+const showLoginBanner = Astro.url.searchParams.get('login') === 'success';
 ---
 
 <Layout
   title="Data dashboard"
   description="Headline TGF parkrunevent statistics"
 >
+  {
+    showLoginBanner && (
+      <div id="login-banner" class="login-banner">
+        <p>
+          You are now logged in and can access protected pages from the menu
+        </p>
+        <button
+          id="close-banner"
+          class="close-banner"
+          aria-label="Close banner"
+        >
+          ×
+        </button>
+      </div>
+    )
+  }
   <HeadlineStats />
   <section class="map-row">
     <HomeRunMap isPreview={true} />
   </section>
 </Layout>
 
+<script>
+  const banner = document.getElementById('login-banner');
+  const closeBtn = document.getElementById('close-banner');
+
+  closeBtn?.addEventListener('click', () => {
+    banner?.remove();
+    // Clean up the URL parameter without refreshing the page
+    const url = new URL(window.location.href);
+    url.searchParams.delete('login');
+    window.history.replaceState({}, '', url);
+  });
+</script>
+
 <style>
+  .login-banner {
+    background: #ecfdf5;
+    border: 1px solid #10b981;
+    color: #065f46;
+    padding: 1rem 1.25rem;
+    border-radius: 0.75rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 500;
+    font-size: 0.875rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
+
+  .close-banner {
+    background: transparent;
+    border: none;
+    color: #059669;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.25rem;
+    display: flex;
+    align-items: center;
+  }
+
   .map-row {
     margin-top: 1rem;
   }

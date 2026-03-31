@@ -48,7 +48,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   // If trying to access login while already logged in
   if (context.url.pathname === '/login' && context.locals.user) {
-    return context.redirect('/');
+    return context.redirect('/?login=success');
   }
 
   return next();

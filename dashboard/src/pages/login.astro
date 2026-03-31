@@ -102,7 +102,7 @@ import Layout from '../layouts/Layout.astro';
       });
 
       if (res.ok) {
-        window.location.assign('/top-lists');
+        window.location.assign('/?login=success');
       } else {
         throw new Error('Failed to create server session');
       }
