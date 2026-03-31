@@ -126,6 +126,7 @@ try {
                 <tr>
                   <td
                     data-col="name"
+                    data-label="Volunteer"
                     data-value={`${row.first_name} ${row.last_name}`}
                   >
                     <span class="volunteer-name">
@@ -135,12 +136,18 @@ try {
                   </td>
                   <td
                     data-col="count"
+                    data-label="Count"
                     data-value={row.current_count}
                     class="count-cell"
                   >
                     {row.current_count}
                   </td>
-                  <td data-col="date" data-value={dateValue} class="date-cell">
+                  <td 
+                    data-col="date" 
+                    data-label="Last Vol"
+                    data-value={dateValue} 
+                    class="date-cell"
+                  >
                     {(() => {
                       const d = row.last_vol_date;
                       if (!d) return '-';
@@ -156,6 +163,7 @@ try {
                   </td>
                   <td
                     data-col="milestone"
+                    data-label="Next Milestone"
                     data-value={row.next_milestone}
                     class="milestone-cell"
                   >
@@ -165,6 +173,7 @@ try {
                   </td>
                   <td
                     data-col="remaining"
+                    data-label="To Go"
                     data-value={row.remaining}
                     class={`remaining-cell ${row.remaining <= 3 ? 'urgent' : ''}`}
                   >
@@ -172,6 +181,7 @@ try {
                   </td>
                   <td
                     data-col="progress"
+                    data-label="Progress"
                     data-value={progressPct}
                     class="progress-cell"
                   >
@@ -533,9 +543,83 @@ try {
   }
 
   @media (max-width: 640px) {
-    .progress-col,
-    .progress-cell {
-      display: none;
+      /* Transform the header into a Sort Button Bar */
+    .milestone-table thead {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      padding: 1rem;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
     }
+    .milestone-table thead tr { display: contents; }
+    .milestone-table th {
+      flex: 1 1 calc(50% - 0.5rem);
+      padding: 0.5rem 1.5rem 0.5rem 0.75rem !important;
+      border-radius: 0.5rem;
+      border: 1px solid #d1d5db;
+      background: white !important;
+      font-size: 0.65rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      white-space: nowrap;
+    }
+    .milestone-table th::after { right: 0.4rem; }
+
+    /* Transform each row into a Card */
+    .milestone-table, .milestone-table tbody, .milestone-table tr, .milestone-table td {
+      display: block;
+      width: 100%;
+    }
+    .milestone-table tr {
+      display: flex;
+      flex-wrap: wrap;
+      margin-bottom: 1.25rem;
+      border: 1px solid #e5e7eb;
+      border-radius: 1rem;
+      overflow: hidden;
+      /* background: white;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); */
+    }
+    .milestone-table td {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 50%;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #f3f4f6;
+      border-right: 1px solid #f3f4f6;
+    }
+    .milestone-table td[data-col="name"],
+    .milestone-table td[data-col="progress"] {
+      width: 100%;
+      border-right: none;
+    }
+    /* Remove right border for items on the right side of the split rows */
+    .milestone-table td[data-col="date"],
+    .milestone-table td[data-col="remaining"] {
+      border-right: none;
+    }
+
+    /* Add labels using the data-label attribute */
+    .milestone-table td::before {
+      content: attr(data-label);
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-size: 0.65rem;
+      letter-spacing: 0.05em;
+      margin-right: 1rem;
+      text-align: left;
+    }
+    .milestone-table td[data-col="name"] {
+      background: #f9fafb;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 1rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .milestone-table td[data-col="name"]::before { margin-bottom: 0.25rem; }
+    .progress-cell { min-width: unset; }
+    .progress-bar-bg { width: 80px; }
   }
 </style>

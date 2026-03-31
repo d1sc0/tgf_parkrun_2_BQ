@@ -123,14 +123,14 @@ const chartData = dist.map(d => d.count);
     <h2 class="section-title">Event #{latest.run_id} Report</h2>
     <p class="event-date">
       {
-        latest.event_date instanceof Date
-          ? latest.event_date.toLocaleDateString('en-GB', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-            })
-          : latest.event_date?.value || 'Unknown Date'
+        (() => {
+          const d = latest.event_date;
+          if (!d) return 'Unknown Date';
+          const date = d instanceof Date ? d : new Date(d.value || d);
+          return isNaN(date.getTime())
+            ? 'Unknown Date'
+            : date.toLocaleDateString('en-GB').split('/').join('-');
+        })()
       }
     </p>
   </header>
@@ -260,10 +260,22 @@ const chartData = dist.map(d => d.count);
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script define:vars={{ chartLabels, chartData }}>
   function initChart() {
-    const ctx = document.getElementById('distributionChart');
-    if (!ctx) return;
+    const canvas = document.getElementById('distributionChart');
+    if (!canvas) return;
 
-    new Chart(ctx, {
+    // Wait for the Chart.js library to load from the CDN
+    if (typeof Chart === 'undefined') {
+      setTimeout(initChart, 100);
+      return;
+    }
+
+    // Ensure we don't try to re-use a canvas that already has a chart
+    const existingChart = Chart.getChart(canvas);
+    if (existingChart) {
+      existingChart.destroy();
+    }
+
+    new Chart(canvas, {
       type: 'bar',
       data: {
         labels: chartLabels,
@@ -381,6 +393,9 @@ const chartData = dist.map(d => d.count);
   @media (min-width: 1024px) {
     .main-grid {
       grid-template-columns: 2fr 1fr;
+    }
+    .stats-grid {
+      grid-template-columns: repeat(3, 1fr);
     }
   }
 
