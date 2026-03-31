@@ -79,11 +79,30 @@ const reportQuery = `
     WHERE run_id = (SELECT MAX(run_id) FROM LatestRuns)
   ),
   Milestones AS (
-    SELECT 
-      first_name, last_name, athlete_id, run_total
-    FROM \`${projectId}.${datasetId}.results\`
-    WHERE run_id = (SELECT MAX(run_id) FROM LatestRuns)
-      AND run_total IN (10, 25, 50, 100, 250, 500)
+    SELECT * FROM (
+      -- Run Milestones
+      SELECT 
+        first_name, last_name, athlete_id, run_total as count, 'Run' as type
+      FROM \`${projectId}.${datasetId}.results\`
+      WHERE run_id = (SELECT MAX(run_id) FROM LatestRuns)
+        AND run_total IN (10, 25, 50, 100, 250, 500)
+      
+      UNION ALL
+
+      -- Volunteer Milestones
+      SELECT 
+        ANY_VALUE(v.first_name) as first_name, 
+        ANY_VALUE(v.last_name) as last_name, 
+        v.athlete_id,
+        GREATEST(
+          IFNULL((SELECT MAX(vol_count) FROM \`${projectId}.${datasetId}.results\` r WHERE r.athlete_id = v.athlete_id), 0),
+          IFNULL((SELECT COUNT(DISTINCT event_date) FROM \`${projectId}.${datasetId}.volunteers\` vsum WHERE vsum.athlete_id = v.athlete_id), 0)
+        ) as count,
+        'Volunteer' as type
+      FROM \`${projectId}.${datasetId}.volunteers\` v
+      WHERE v.run_id = (SELECT MAX(run_id) FROM LatestRuns) AND v.athlete_id IS NOT NULL
+      GROUP BY v.athlete_id
+    ) WHERE count IN (10, 25, 50, 100, 250, 500)
   ),
   Distribution AS (
     SELECT 
@@ -121,7 +140,7 @@ const reportQuery = `
      WHERE run_id = (SELECT MAX(run_id) FROM LatestRuns)) as latest,
     (SELECT AS STRUCT * FROM RunMetrics WHERE run_id = (SELECT MIN(run_id) FROM LatestRuns)) as previous,
     ARRAY(SELECT AS STRUCT * FROM FirstFinishers WHERE rn = 1 ORDER BY finish_position ASC) as first_finishers,
-    ARRAY(SELECT AS STRUCT * FROM Milestones ORDER BY run_total DESC) as milestones,
+    ARRAY(SELECT AS STRUCT * FROM Milestones ORDER BY count DESC, type ASC) as milestones,
     ARRAY(SELECT AS STRUCT * FROM Distribution ORDER BY minute_bucket ASC) as distribution
 `;
 
@@ -400,16 +419,21 @@ const chartData = dist.map(d => d.count);
     </div>
 
     <div class="content-card">
-      <h3 class="card-title">Milestones Today</h3>
+      <h3 class="card-title">Milestones Achieved</h3>
       {
         milestones.length > 0 ? (
           <ul class="milestone-list">
             {milestones.map(m => (
               <li>
-                <strong>
-                  {m.first_name} {m.last_name}
-                </strong>
-                <span class={`badge m-${m.run_total}`}>{m.run_total}</span>
+                <div class="m-info">
+                  <span class="m-name">
+                    {m.first_name} {m.last_name}
+                  </span>
+                  <span class:list={['m-type', m.type.toLowerCase()]}>
+                    {m.type === 'Run' ? '🏃 Run' : '🙌 Vol'}
+                  </span>
+                </div>
+                <span class={`badge m-${m.count}`}>{m.count}</span>
               </li>
             ))}
           </ul>
@@ -708,6 +732,30 @@ const chartData = dist.map(d => d.count);
     justify-content: space-between;
     align-items: center;
     font-size: 0.875rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .milestone-list li:last-child {
+    border-bottom: none;
+  }
+
+  .m-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .m-name {
+    font-weight: 700;
+    color: var(--text-main);
+  }
+
+  .m-type {
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    color: var(--text-muted);
   }
 
   .badge {
