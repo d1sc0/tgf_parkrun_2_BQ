@@ -2,64 +2,31 @@
 import { runQuery } from '../lib/bigquery';
 
 const projectId = import.meta.env.GCP_PROJECT_ID;
-const datasetId = import.meta.env.BIGQUERY_DATASET_ID || 'parkrun_data';
+const viewsDatasetId =
+  import.meta.env.BIGQUERY_VIEWS_DATASET_ID ||
+  import.meta.env.BIGQUERY_DATASET_ID ||
+  'parkrun_data';
 
 /**
  * Query identifies volunteers, counts their unique event dates,
  * and finds the next milestone in the sequence [10, 25, 50, 100, 250, 500].
  */
 const milestoneQuery = `
-  WITH VolunteerSummary AS (
-    SELECT
-      athlete_id,
-      ANY_VALUE(first_name) as first_name,
-      ANY_VALUE(last_name) as last_name,
-      COUNT(DISTINCT event_date) as vol_table_count,
-      MAX(event_date) as last_vol_date,
-      ARRAY_AGG(run_id ORDER BY event_date DESC LIMIT 1)[OFFSET(0)] as last_run_id
-    FROM \`${projectId}.${datasetId}.volunteers\`
-    WHERE athlete_id IS NOT NULL AND athlete_id != 2214
-    GROUP BY athlete_id
-  ),
-  ResultSummary AS (
-    SELECT athlete_id, MAX(vol_count) as highest_vol_results
-    FROM \`${projectId}.${datasetId}.results\`
-    WHERE athlete_id IS NOT NULL AND athlete_id != 2214
-    GROUP BY athlete_id
-  ),
-  VolunteerCounts AS (
-    SELECT
-      v.*,
-      GREATEST(v.vol_table_count, IFNULL(r.highest_vol_results, 0)) as current_count
-    FROM VolunteerSummary v
-    LEFT JOIN ResultSummary r ON v.athlete_id = r.athlete_id
-    WHERE GREATEST(v.vol_table_count, IFNULL(r.highest_vol_results, 0)) > 5
-  ),
-  Milestones AS (
-    SELECT m FROM UNNEST([10, 25, 50, 100, 250, 500]) AS m
-  ),
-  NextMilestone AS (
-    SELECT
-      v.athlete_id,
-      v.first_name,
-      v.last_name,
-      v.current_count,
-      v.last_vol_date,
-      v.last_run_id,
-      MIN(m.m) as next_milestone
-    FROM VolunteerCounts v
-    INNER JOIN Milestones m ON m.m > v.current_count
-    GROUP BY 1, 2, 3, 4, 5, 6
-  )
   SELECT
-    *,
-    (next_milestone - current_count) as remaining
-  FROM NextMilestone
+    athlete_id,
+    first_name,
+    last_name,
+    current_count,
+    last_vol_date,
+    last_run_id,
+    next_milestone,
+    remaining,
+    progress_pct
+  FROM \`${projectId}.${viewsDatasetId}._23_dashboard_volunteer_milestones\`
   ORDER BY last_vol_date DESC, remaining ASC
-  LIMIT 100
 `;
 
-let volunteers = [];
+let volunteers: any[] = [];
 try {
   volunteers = await runQuery(milestoneQuery);
 } catch (error) {
