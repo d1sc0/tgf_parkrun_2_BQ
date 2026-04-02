@@ -4,7 +4,7 @@ This folder contains reusable SQL queries for row counts, athlete summaries, vol
 
 Also included:
 
-- 16_headline_stats.sql: one-row headline metrics dashboard query.
+- 20_dashboard_headline_stats.sql: Aggregated metrics optimized for the HeadlineStats dashboard widget.
 
 Publish all SQL files in this folder as BigQuery views:
 
@@ -29,21 +29,10 @@ When you run npm run publish:views, each SQL file is published as a view using t
 - 09_junior_volunteers_athlete_roles_summary.sql -> \_09_junior_volunteers_athlete_roles_summary
 - 10_duplicate_rows_detailed.sql -> \_10_duplicate_rows_detailed
 - 11_duplicate_rows_summary.sql -> \_11_duplicate_rows_summary
-- 12_daily_qa_latest_date_rows.sql -> \_12_daily_qa_latest_date_rows
-- 13_daily_qa_day_over_day_deltas.sql -> \_13_daily_qa_day_over_day_deltas
-- 14_daily_qa_null_rates.sql -> \_14_daily_qa_null_rates
-- 15_daily_qa_latest_run_completeness.sql -> \_15_daily_qa_latest_run_completeness
-- 16_headline_stats.sql -> \_16_headline_stats
 - 17_missing_positions.sql -> \_17_missing_positions
 - 18_run_time_stats_by_run_id.sql -> \_18_run_time_stats_by_run_id
 - 19_attendance_by_run_id.sql -> \_19_attendance_by_run_id
-- 20_finish_time_stats_by_age_range_gender.sql -> \_20_finish_time_stats_by_age_range_gender
-- 21_top_20_fastest_male_athletes.sql -> \_21_top_20_fastest_male_athletes
-- 22_top_20_fastest_female_athletes.sql -> \_22_top_20_fastest_female_athletes
-- 23_top_20_attendees.sql -> \_23_top_20_attendees
-- 24_top_20_volunteers.sql -> \_24_top_20_volunteers
-- 25_top_20_clubs_by_finishers.sql -> \_25_top_20_clubs_by_finishers
-- 26_top_20_home_parkruns_by_finishers.sql -> \_26_top_20_home_parkruns_by_finishers
+- 20_dashboard_headline_stats.sql -> \_20_dashboard_headline_stats
 
 Current summary metrics additions:
 
@@ -56,22 +45,18 @@ Current summary metrics additions:
 
 - 08/09 volunteer athlete summary views include the same highest metrics and genuine_pb_count joined by athlete_id from results/junior_results.
 
-- 16 headline stats view includes:
-  - parkrun_pb_count, junior_pb_count
-  - parkrun_genuine_pb_count, junior_genuine_pb_count
+- 20 dashboard headline stats view includes:
+  - total events, finishers, and distance
+  - journey to the moon progress calculation
+  - unique athletes and volunteers
+  - fastest, slowest, and mean finish times
 
-Recommended run order:
+Recommended run order for quality checks:
 
-1. 12_daily_qa_latest_date_rows.sql
-2. 13_daily_qa_day_over_day_deltas.sql
-3. 14_daily_qa_null_rates.sql
-4. 11_duplicate_rows_summary.sql
-5. 10_duplicate_rows_detailed.sql (only if summary shows duplicates)
-
-Parameter notes:
-
-- 15_daily_qa_latest_run_completeness.sql requires:
-  - @target_event_number (INT64)
+1. 11_duplicate_rows_summary.sql
+2. 10_duplicate_rows_detailed.sql (only if summary shows duplicates)
+3. 17_missing_positions.sql
+4. 05_total_rows_all_tables.sql
 
 Table assumptions:
 
