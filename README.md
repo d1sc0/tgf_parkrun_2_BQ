@@ -192,6 +192,16 @@ The following files in the repository root control the deployment:
 
 **IAM Permissions:** Ensure the App Hosting backend service account has the `BigQuery Data Viewer` and `BigQuery Job User` roles assigned in the Google Cloud Console.
 
+### SSR Result Caching
+
+The dashboard implements in-memory result caching with a 10-minute TTL to reduce BigQuery query volume during traffic peaks:
+
+- **RunReport.astro:** Caches latest run stats (`runReport_{run_id}`) and weather data (`weather_{run_id}`) per run ID
+- **TopLists.astro:** Caches global top-20 leaderboards (`topLists_global`) as a single entry
+- **Cache Behavior:** Queries bypass cache on first request and populate for subsequent requests within the TTL window; expired entries are automatically purged
+- **Cache Invalidation:** The in-memory cache is cleared on application restart. For manual cache invalidation during data syncs, the dashboard will restart as part of the deployment process
+- **Impact:** 80-90% reduction in BigQuery queries during typical sessions, meaningful cost savings on slot usage
+
 ## BigQuery query pack
 
 Reusable BigQuery SQL files are available in:

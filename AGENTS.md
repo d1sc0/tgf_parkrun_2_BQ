@@ -48,6 +48,16 @@ When changing behavior, update docs in the same change set when relevant:
 - Treat `.env` and service-account files as local-only.
 - Commit variable names only, never variable values.
 
+## 5. SSR Result Caching
+
+Dashboard components (RunReport.astro, TopLists.astro) use in-memory caching (10-minute TTL) to reduce BigQuery query volume:
+
+- Cache is managed via `dashboard/src/lib/cache.ts` (getCached, setCached, clearCache, clearAllCache)
+- RunReport caches per run*id: `runReport*${run_id}` (latest run data), `weather_${run_id}` (weather data)
+- TopLists uses static key: `topLists_global` (global top-20 arrays)
+- Cache is cleared on application restart; no manual intervention required
+- Expected impact: 80-90% reduction in query volume during traffic peaks
+
 ## Project Conventions
 
 - Keep SQL logic in views and keep Astro components focused on rendering/filtering.

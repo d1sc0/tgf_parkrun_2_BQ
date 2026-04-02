@@ -1,5 +1,6 @@
 ---
 import { runQuery } from '../lib/bigquery';
+import { getCached, setCached } from '../lib/cache';
 
 const projectId = import.meta.env.GCP_PROJECT_ID;
 const viewsDatasetId =
@@ -62,8 +63,14 @@ const reportQuery = `
 
 let data: any = null;
 try {
-  const results = await runQuery(reportQuery, { targetRunId });
-  data = results[0];
+  const cacheKey = `runReport_${targetRunId}`;
+  data = getCached(cacheKey);
+
+  if (!data) {
+    const results = await runQuery(reportQuery, { targetRunId });
+    data = results[0];
+    setCached(cacheKey, data, 10); // Cache for 10 minutes
+  }
 } catch (e) {
   console.error('Run Report Error:', e);
 }
@@ -80,28 +87,34 @@ let weather: { temp: number; code: number; wind: number } | null = null;
 const latestRunId = Number(latest.run_id?.value || latest.run_id);
 
 if (!isNaN(latestRunId)) {
-  const weatherQuery = `
-    SELECT
-      temp_c,
-      weather_code,
-      wind_mph
-    FROM \`${projectId}.${dataDatasetId}.${weatherTableId}\`
-    WHERE run_id = @runId
-    LIMIT 1
-  `;
+  const weatherCacheKey = `weather_${latestRunId}`;
+  weather = getCached(weatherCacheKey);
 
-  try {
-    const weatherRows = await runQuery(weatherQuery, { runId: latestRunId });
-    const weatherRow = weatherRows?.[0];
-    if (weatherRow) {
-      weather = {
-        temp: Number(weatherRow.temp_c),
-        code: Number(weatherRow.weather_code),
-        wind: Number(weatherRow.wind_mph),
-      };
+  if (!weather) {
+    const weatherQuery = `
+      SELECT
+        temp_c,
+        weather_code,
+        wind_mph
+      FROM \`${projectId}.${dataDatasetId}.${weatherTableId}\`
+      WHERE run_id = @runId
+      LIMIT 1
+    `;
+
+    try {
+      const weatherRows = await runQuery(weatherQuery, { runId: latestRunId });
+      const weatherRow = weatherRows?.[0];
+      if (weatherRow) {
+        weather = {
+          temp: Number(weatherRow.temp_c),
+          code: Number(weatherRow.weather_code),
+          wind: Number(weatherRow.wind_mph),
+        };
+        setCached(weatherCacheKey, weather, 10); // Cache for 10 minutes
+      }
+    } catch (e) {
+      console.error('Weather query failed:', e);
     }
-  } catch (e) {
-    console.error('Weather query failed:', e);
   }
 }
 

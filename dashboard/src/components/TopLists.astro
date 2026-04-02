@@ -1,5 +1,6 @@
 ---
 import { runQuery } from '../lib/bigquery';
+import { getCached, setCached } from '../lib/cache';
 
 /**
  * Top Lists Component (SSR Version)
@@ -19,7 +20,15 @@ const query = `
 
 let rows: any[] = [];
 try {
-  rows = await runQuery(query);
+  const cacheKey = 'topLists_global';
+  const cachedRows = getCached<any[]>(cacheKey);
+  
+  if (cachedRows) {
+    rows = cachedRows;
+  } else {
+    rows = await runQuery(query);
+    setCached(cacheKey, rows, 10); // Cache for 10 minutes
+  }
 } catch (error) {
   console.error('Failed to fetch top lists:', error);
 }

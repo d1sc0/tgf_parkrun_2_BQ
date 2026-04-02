@@ -31,6 +31,10 @@ Purpose: practical non-sensitive reference for maintainers and automation agents
 - utilities/sync-weather-history.js
   - Syncs weather snapshots into `parkrun_data.event_weather` using Open-Meteo archive data.
   - Supports backfill mode (`npm run sync:weather`) and latest-only mode (`npm run sync:weather:latest`).
+- dashboard/src/lib/cache.ts
+  - In-memory result caching utility with TTL support for SSR performance optimization.
+  - Exports: getCached(key), setCached(key, data, ttlMinutes), clearCache(key), clearAllCache()
+  - Currently used by RunReport.astro and TopLists.astro to reduce BigQuery queries during traffic peaks (10-minute TTL).
 - sql/bigquery/\*.sql
   - QA, summary, duplicate detection, and reporting views.
 
