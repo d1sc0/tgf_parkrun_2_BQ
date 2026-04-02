@@ -5,26 +5,33 @@ interface Props {
   isPreview?: boolean;
 }
 
+interface MapPoint {
+  name: string;
+  count: number;
+  lat: number;
+  lng: number;
+}
+
 const { isPreview = false } = Astro.props;
 
 const projectId = import.meta.env.GCP_PROJECT_ID;
-const datasetId = import.meta.env.BIGQUERY_DATASET_ID || 'parkrun_data';
+const viewsDatasetId =
+  import.meta.env.BIGQUERY_VIEWS_DATASET_ID ||
+  import.meta.env.BIGQUERY_DATASET_ID ||
+  'parkrun_data';
 
-const user = Astro.locals.user;
+const user = (Astro.locals as { user?: unknown }).user;
 
 // 1. Fetch home run stats from BigQuery
 const bqQuery = `
-  SELECT 
+  SELECT
     home_run_name,
-    COUNT(DISTINCT athlete_id) as athlete_count
-  FROM \`${projectId}.${datasetId}.results\`
-  WHERE home_run_name IS NOT NULL AND home_run_name != ''
-    AND is_unknown_athlete = false
-  GROUP BY home_run_name
+    athlete_count
+  FROM \`${projectId}.${viewsDatasetId}._22_dashboard_visitor_stats\`
   ORDER BY athlete_count DESC
 `;
 
-let mapData = [];
+let mapData: MapPoint[] = [];
 try {
   // Fetch BigQuery stats and Parkrun event coordinates in parallel
   const [homeRunStats, eventsResponse] = await Promise.all([
@@ -39,7 +46,7 @@ try {
   mapData = (homeRunStats || [])
     .map(stat => {
       const eventMatch = allEvents.find(
-        e =>
+        (e: any) =>
           e.properties.eventname.toLowerCase() ===
             stat.home_run_name.toLowerCase() ||
           e.properties.EventLongName.toLowerCase() ===
@@ -56,7 +63,7 @@ try {
       }
       return null;
     })
-    .filter(Boolean);
+    .filter((point): point is MapPoint => point !== null);
 } catch (error) {
   console.error('Failed to fetch map data:', error);
 }
