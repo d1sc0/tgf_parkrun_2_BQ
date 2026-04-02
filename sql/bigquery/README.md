@@ -23,6 +23,11 @@ Optional environment override for view destination dataset:
 
 - BIGQUERY_VIEWS_DATASET_ID (defaults to BIGQUERY_DATASET_ID)
 
+Visitor map coordinate prerequisite:
+
+- Run `npm run sync:coordinates` to populate `parkrun_data.event_coordinates` before publishing/using `_22_dashboard_visitor_stats`.
+- Some home runs may remain unmatched (NULL latitude/longitude) for retired or renamed events not present in the current Parkrun coordinate feed.
+
 ## Architecture: View-Based Components
 
 Dashboard components follow a **separation of concerns** pattern:

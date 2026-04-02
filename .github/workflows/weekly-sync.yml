@@ -204,5 +204,8 @@ jobs:
       - name: Ensure BigQuery dataset/tables exist
         run: npm run setup:bq
 
+      - name: Sync event coordinates
+        run: npm run sync:coordinates
+
       - name: Run parkrun sync (sync_parkrun.js via npm run dev)
         run: npm run dev

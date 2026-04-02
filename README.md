@@ -35,6 +35,7 @@ npm run dashboard # Starts Astro dev server
 ## Maintainer Reference
 
 - [docs/repo-operations-reference.md](docs/repo-operations-reference.md)
+- [docs/event-coordinates-optimization.md](docs/event-coordinates-optimization.md)
 
 ## How it works
 
@@ -149,6 +150,10 @@ npm install
 Create/check dataset and tables:
 
 npm run setup:bq
+
+Sync event coordinates used by the visitor map:
+
+npm run sync:coordinates
 
 Run sync:
 
@@ -288,7 +293,9 @@ Current behavior in workflow:
 
 - Runs every Monday at 05:00 UTC.
 - Also supports manual run via workflow_dispatch.
-- Runs in latest-only mode:
+- Syncs event coordinates before data sync:
+  - npm run sync:coordinates
+- Runs data sync in latest-only mode:
   - FETCH_LATEST_ONLY=true
   - SCRAPE_MAX_EVENTS=1
   - RUN_JUNIOR=false

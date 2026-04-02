@@ -25,6 +25,9 @@ Purpose: practical non-sensitive reference for maintainers and automation agents
   - Publishes SQL files in sql/bigquery as BigQuery views.
 - utilities/create-bigquery-tables.js
   - Creates/ensures BigQuery tables used by the pipeline.
+- utilities/sync-event-coordinates.js
+  - Syncs Parkrun coordinate feed into `parkrun_data.event_coordinates`.
+  - Uses BigQuery load job with `WRITE_TRUNCATE` for safe repeat runs.
 - sql/bigquery/\*.sql
   - QA, summary, duplicate detection, and reporting views.
 
@@ -40,6 +43,10 @@ Core tables:
 - volunteers
 - junior_results
 - junior_volunteers
+
+Supporting table:
+
+- event_coordinates
 
 Common key fields:
 
@@ -85,6 +92,9 @@ Notable SQL files:
     - parkrun_genuine_pb_count, junior_genuine_pb_count
 - 17_missing_positions.sql
   - Detects missing finish positions in results.
+- 22_dashboard_visitor_stats.sql
+  - Produces visitor map rows with coordinate matching from `event_coordinates`.
+  - Some rows can remain unmatched (NULL coordinates) for retired/renamed events.
 
 ## Parkrun API Endpoints in Use
 
@@ -143,9 +153,19 @@ Text report sections:
 
 - npm run setup:bq
 - npm run publish:views
+- npm run sync:coordinates
 - npm run dev
 - npm run backfill -- --input missing.json
 - npm run compare:bq
+
+## GitHub Actions Weekly Job Notes
+
+- Workflow: `.github/workflows/weekly-sync.yml`
+- Weekly schedule: Monday 05:00 UTC (plus manual dispatch)
+- Current sequence:
+  - `npm run setup:bq`
+  - `npm run sync:coordinates`
+  - `npm run dev`
 
 ## Ongoing Maintenance Notes
 

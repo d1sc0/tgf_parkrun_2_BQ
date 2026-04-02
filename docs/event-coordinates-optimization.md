@@ -9,8 +9,8 @@ This optimization caches event coordinates in BigQuery, eliminating the external
 ## How It Works
 
 1. **Sync Script** (`utilities/sync-event-coordinates.js`): Fetches `events.json` once and loads coordinates into a BigQuery table
-2. **View Query** (`sql/bigquery/22_dashboard_visitor_stats.sql`): Includes commented-out optimized SQL that joins to the cached coordinates
-3. **Component Logic** (`dashboard/src/components/HomeRunMap.astro`): Intelligently uses cached coordinates when available, falls back to fetching `events.json` if needed
+2. **View Query** (`sql/bigquery/22_dashboard_visitor_stats.sql`): Joins visitor stats to cached coordinates using normalized name matching (`event_name` and `event_long_name` variants)
+3. **Component Logic** (`dashboard/src/components/HomeRunMap.astro`): Reads coordinates directly from `_22_dashboard_visitor_stats` and plots only matched locations
 
 ## Setup Instructions
 
@@ -19,8 +19,9 @@ This optimization caches event coordinates in BigQuery, eliminating the external
 Make sure your environment has proper Google Cloud credentials:
 
 ```bash
-export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
-# OR use Application Default Credentials (gcloud auth application-default login)
+export GOOGLE_CREDENTIALS_PATH=./service-account-key.json
+# Optional fallback supported by sync script:
+# export GOOGLE_APPLICATION_CREDENTIALS=./service-account-key.json
 ```
 
 ### Step 2: Sync Event Coordinates
@@ -35,25 +36,20 @@ This will:
 
 - Create the `event_coordinates` table in your BigQuery dataset
 - Fetch all event coordinates from the Parkrun API
-- Insert them into BigQuery (can be re-run anytime to refresh)
+- Replace table contents using a BigQuery `WRITE_TRUNCATE` load job (safe to re-run)
 
 Expected output:
 
 ```
 Fetching event coordinates from parkrun events.json...
-Fetched 600+ event coordinates. Loading into BigQuery...
-Successfully loaded XXX event coordinates.
+Fetched 2800+ event coordinates. Loading into BigQuery...
+Successfully loaded XXXX event coordinates.
 ✅ Event coordinates sync completed successfully.
 ```
 
-### Step 3: Enable the Optimized View
+### Step 3: Publish Views
 
-Once coordinates are cached, uncomment the optimized SQL in `sql/bigquery/22_dashboard_visitor_stats.sql`:
-
-1. Open `sql/bigquery/22_dashboard_visitor_stats.sql`
-2. Comment out the current version (lines with `CAST(NULL AS...`)
-3. Uncomment the optimized version (lines starting with `--	v.home_run_name`)
-4. Save and republish views:
+Publish SQL views so `_22_dashboard_visitor_stats` uses the latest coordinate-matching logic:
 
 ```bash
 npm run publish:views
@@ -61,9 +57,17 @@ npm run publish:views
 
 ### Step 4: Verify
 
-- The map component will now use cached BigQuery coordinates
-- Check the browser console—you should NOT see a log message about fetching from Parkrun API
-- Page load times should improve slightly
+- The map component uses cached BigQuery coordinates (no external `events.json` call)
+- Coordinate coverage can be validated with:
+
+```sql
+SELECT
+  COUNT(*) AS total_rows,
+  COUNTIF(latitude IS NOT NULL AND longitude IS NOT NULL) AS rows_with_coords
+FROM `PROJECT.DATASET._22_dashboard_visitor_stats`;
+```
+
+- A small number of rows may remain unmatched for retired or renamed events that no longer exist in the current coordinate feed
 
 ## Benefits
 
@@ -89,17 +93,8 @@ event_coordinates:
 
 ### View Behavior
 
-**Before optimization:** View returns NULL for latitude/longitude → HomeRunMap falls back to external API  
-**After optimization:** View returns real coordinates from JOIN → HomeRunMap uses cached data
-
-### Fallback Logic
-
-If coordinates table is missing or view isn't updated, HomeRunMap automatically:
-
-1. Detects NULL coordinates from the view
-2. Falls back to fetching `events.json` from Parkrun
-3. Matches coordinates client-side (original behavior)
-4. No errors—just slower
+**Before optimization:** HomeRunMap fetched external `events.json` during page render and matched client-side.  
+**After optimization:** `_22_dashboard_visitor_stats` resolves coordinates in BigQuery and HomeRunMap renders directly from view output.
 
 ## Maintenance
 
@@ -109,21 +104,22 @@ Re-run `npm run sync:coordinates` periodically (e.g., monthly) if new parkrun ev
 
 **Error: "Could not load the default credentials"**
 
-- Ensure `GOOGLE_APPLICATION_CREDENTIALS` environment variable is set or you're authenticated via `gcloud auth application-default login`
+- Set `GOOGLE_CREDENTIALS_PATH` in `.env` to a valid service-account key path
+- Optional fallback: set `GOOGLE_APPLICATION_CREDENTIALS`
 
 **Error: "Table event_coordinates was not found"**
 
 - Run `npm run sync:coordinates` first to create and populate the table
 
-**Map still fetching from Parkrun API**
+**Map missing some locations**
 
-- Check if the optimized SQL in `22_dashboard_visitor_stats.sql` is uncommented
-- Run `npm run publish:views` to apply changes
-- Check browser console to see which path is being taken
+- This usually means those `home_run_name` values cannot be matched to current coordinate-feed names
+- Query `_22_dashboard_visitor_stats` for rows where latitude/longitude are null to inspect unmatched names
+- For retired events, null coordinates are expected
 
 ## Related Files
 
 - `utilities/sync-event-coordinates.js` — Sync script
-- `sql/bigquery/22_dashboard_visitor_stats.sql` — View with optimized SQL (commented)
-- `dashboard/src/components/HomeRunMap.astro` — Component with fallback logic
+- `sql/bigquery/22_dashboard_visitor_stats.sql` — View with active coordinate matching logic
+- `dashboard/src/components/HomeRunMap.astro` — Component that renders mapped points from cached coordinates
 - `package.json` — `npm run sync:coordinates` script

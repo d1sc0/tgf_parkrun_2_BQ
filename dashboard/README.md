@@ -18,11 +18,12 @@ The frontend component of the Parkrun Data Dive. This is an **Astro SSR** applic
   - **Hybrid Data:** Combines local event-specific volunteer history with global `vol_count` data from the results table for maximum accuracy.
   - **Interactive Table:** Supports real-time client-side filtering (name/ID) and multi-column sorting.
 - **Visitors Map:** A geographic visualization of where athletes travel from.
+  - **Cached Coordinates:** Uses `_22_dashboard_visitor_stats` with coordinates resolved server-side via `event_coordinates` in BigQuery.
   - **Heatmap Layer:** Toggleable density overlay to see "hot spots" of visitor origin.
   - **Smart Preview:** homepage widget provides a static, zero-interaction snapshot for public viewing, while the full interactive version remains protected.
 - **Course Records:** Deep-dive into the fastest times ever recorded at the event, filterable by age category and gender.
 
-## � Key Directories
+## Key Directories
 
 - `src/layouts/`: The `Layout.astro` component wraps all pages with a 1024px max-width container and global styles.
 - `src/components/`: Each dashboard component queries its corresponding published BigQuery view:
@@ -46,17 +47,9 @@ Athlete names are personally identifiable information (PII). This dashboard foll
 2. Data is fetched on the server; the client only receives rendered HTML.
 3. Key normalization ensures that BigQuery's case-sensitive column names are handled gracefully in JavaScript.
 
-```
-
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
-
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
-
-Any static assets, like images, can be placed in the `public/` directory.
-
 ## 🧞 Commands
 
-All commands are run from the root of the project, from a terminal:
+All commands are run from the `dashboard/` folder:
 
 | Command                   | Action                                           |
 | :------------------------ | :----------------------------------------------- |
@@ -70,4 +63,3 @@ All commands are run from the root of the project, from a terminal:
 ## 👀 Want to learn more?
 
 Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
-```
