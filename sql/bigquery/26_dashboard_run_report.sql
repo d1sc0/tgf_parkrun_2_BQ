@@ -157,22 +157,10 @@ first_finishers_array AS (
 distribution AS (
   SELECT
     run_id,
-    CAST(
-      FLOOR(
-        CASE
-          WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 3 THEN
-            SAFE_CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64) * 60
-            + SAFE_CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64)
-          WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 2 THEN
-            SAFE_CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64)
-          ELSE 0
-        END
-      ) AS INT64
-    ) AS minute_bucket,
+    CAST(FLOOR(finish_seconds / 60) AS INT64) AS minute_bucket,
     COUNT(*) AS count
   FROM parsed_results
-  WHERE finish_time IS NOT NULL
-    AND finish_time != ''
+  WHERE finish_seconds IS NOT NULL
   GROUP BY run_id, minute_bucket
 ),
 distribution_array AS (
