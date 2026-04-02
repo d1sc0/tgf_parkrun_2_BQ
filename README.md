@@ -38,6 +38,7 @@ npm run dashboard # Starts Astro dev server
 - [docs/event-coordinates-optimization.md](docs/event-coordinates-optimization.md)
 - [docs/ssr-result-caching-optimization.md](docs/ssr-result-caching-optimization.md)
 - [docs/weather-data-optimization.md](docs/weather-data-optimization.md)
+- [docs/dashboard-ui-patterns.md](docs/dashboard-ui-patterns.md)
 
 ## How it works
 
