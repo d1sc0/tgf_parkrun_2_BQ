@@ -68,7 +68,7 @@ SELECT
 	current_count,
 	last_vol_date,
 	last_run_id,
-	next_milestone,
+	next_milestone.next_milestone AS next_milestone,
 	next_milestone.next_milestone - current_count AS remaining,
 	ROUND(current_count / next_milestone.next_milestone * 100) AS progress_pct
 FROM next_milestone

@@ -2,7 +2,10 @@
 import { runQuery } from '../lib/bigquery';
 
 const projectId = import.meta.env.GCP_PROJECT_ID;
-const datasetId = import.meta.env.BIGQUERY_DATASET_ID || 'parkrun_data';
+const viewsDatasetId =
+  import.meta.env.BIGQUERY_VIEWS_DATASET_ID ||
+  import.meta.env.BIGQUERY_DATASET_ID ||
+  'parkrun_data';
 
 let targetRunId = parseInt(Astro.url.searchParams.get('run') || '', 10);
 if (isNaN(targetRunId)) targetRunId = -1;
@@ -12,151 +15,49 @@ if (isNaN(targetRunId)) targetRunId = -1;
  * It calculates: Finishers, Volunteers, New Parkrunners (RunTotal=1), and PBs.
  */
 const reportQuery = `
-  WITH AllRuns AS (
-    SELECT run_id, event_date 
-    FROM \`${projectId}.${datasetId}.results\` 
-    GROUP BY 1, 2
-  ),
-  OrderedRuns AS (
-    SELECT *, 
-           LAG(run_id) OVER (ORDER BY event_date ASC) as prev_id,
-           LEAD(run_id) OVER (ORDER BY event_date ASC) as next_id
-    FROM AllRuns
-  ),
-  CurrentRun AS (
-    SELECT * FROM OrderedRuns 
-    WHERE (@targetRunId = -1 AND run_id = (SELECT MAX(run_id) FROM AllRuns))
-       OR (run_id = @targetRunId)
-  ),
-  LatestRuns AS (
-    SELECT run_id, event_date FROM CurrentRun
-    UNION ALL
-    SELECT run_id, event_date FROM AllRuns WHERE run_id = (SELECT prev_id FROM CurrentRun)
-  ),
-  RunMetrics AS (
-    SELECT
-      r.run_id,
-      ANY_VALUE(r.event_date) as event_date,
-      COUNT(*) as finishers,
-      COUNTIF(r.was_first_run_at_event = true AND r.is_unknown_athlete = false) as first_timers,
-      COUNTIF(r.run_total = 1 AND r.is_unknown_athlete = false) as new_parkrunners,
-      COUNTIF(r.was_genuine_pb = true) as pbs,
-      COUNTIF(r.is_unknown_athlete = true) as unknowns,
-      (SELECT COUNT(DISTINCT athlete_id) FROM \`${projectId}.${datasetId}.volunteers\` v WHERE v.run_id = r.run_id) as volunteers,
-      MIN(
-        CASE
-          WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 3 THEN
-            CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64) * 3600 + CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64) * 60 + CAST(SPLIT(finish_time, ':')[OFFSET(2)] AS INT64)
-          WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 2 THEN
-            CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64) * 60 + CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64)
-          ELSE NULL
-        END
-      ) as fastest_s,
-      MAX(
-        CASE
-          WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 3 THEN
-            CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64) * 3600 + CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64) * 60 + CAST(SPLIT(finish_time, ':')[OFFSET(2)] AS INT64)
-          WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 2 THEN
-            CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64) * 60 + CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64)
-          ELSE NULL
-        END
-      ) as slowest_s,
-      AVG(
-        CASE
-          WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 3 THEN
-            CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64) * 3600 + CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64) * 60 + CAST(SPLIT(finish_time, ':')[OFFSET(2)] AS INT64)
-          WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 2 THEN
-            CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64) * 60 + CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64)
-          ELSE NULL
-        END
-      ) as mean_s
-    FROM \`${projectId}.${datasetId}.results\` r
-    WHERE r.run_id IN (SELECT run_id FROM LatestRuns)
-    GROUP BY 1
-  ),
-  FirstFinishers AS (
-    SELECT 
+  SELECT
+    STRUCT(
       run_id,
-      first_name,
-      last_name,
-      finish_time,
-      age_grading,
-      finish_position,
-      CASE 
-        WHEN age_category LIKE 'M%' OR age_category LIKE 'JM%' OR age_category LIKE 'SM%' OR age_category LIKE 'VM%' THEN 'Male'
-        ELSE 'Female'
-      END as gender,
-      ROW_NUMBER() OVER (PARTITION BY run_id, 
-        CASE 
-          WHEN age_category LIKE 'M%' OR age_category LIKE 'JM%' OR age_category LIKE 'SM%' OR age_category LIKE 'VM%' THEN 'Male'
-          ELSE 'Female'
-        END 
-        ORDER BY finish_position ASC) as rn
-    FROM \`${projectId}.${datasetId}.results\`
-    WHERE run_id = (SELECT MAX(run_id) FROM LatestRuns)
-  ),
-  Distribution AS (
-    SELECT 
-      CAST(FLOOR(
-        CASE
-          WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 3 THEN
-            CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64) * 60 + CAST(SPLIT(finish_time, ':')[OFFSET(1)] AS INT64)
-          WHEN ARRAY_LENGTH(SPLIT(finish_time, ':')) = 2 THEN
-            CAST(SPLIT(finish_time, ':')[OFFSET(0)] AS INT64)
-          ELSE 0
-        END
-      ) AS INT64) as minute_bucket,
-      COUNT(*) as count
-    FROM \`${projectId}.${datasetId}.results\`
-    WHERE run_id = (SELECT MAX(run_id) FROM LatestRuns)
-      AND finish_time IS NOT NULL AND finish_time != ''
-    GROUP BY 1
-  ),
-  TopAgeGrades AS (
-    SELECT first_name, last_name, age_grading, finish_time, age_category
-    FROM \`${projectId}.${datasetId}.results\`
-    WHERE run_id = (SELECT MAX(run_id) FROM LatestRuns)
-    ORDER BY age_grading DESC
-    LIMIT 5
-  ),
-  Visitors AS (
-    SELECT home_run_name, COUNT(*) as count
-    FROM \`${projectId}.${datasetId}.results\`
-    WHERE run_id = (SELECT MAX(run_id) FROM LatestRuns)
-      AND home_run_name IS NOT NULL AND home_run_name != ''
-      AND home_run_name != 'The Great Field parkrun'
-      AND is_unknown_athlete = false
-    GROUP BY 1
-    ORDER BY count DESC
-    LIMIT 15
-  )
-  SELECT 
-    (SELECT AS STRUCT 
-        *,
-        CASE
-          WHEN fastest_s >= 3600 THEN FORMAT('%02d:%02d:%02d', CAST(DIV(fastest_s, 3600) AS INT64), CAST(DIV(MOD(fastest_s, 3600), 60) AS INT64), CAST(MOD(fastest_s, 60) AS INT64))
-          ELSE FORMAT('%02d:%02d', CAST(DIV(fastest_s, 60) AS INT64), CAST(MOD(fastest_s, 60) AS INT64))
-        END as fastest_time,
-        CASE
-          WHEN slowest_s >= 3600 THEN FORMAT('%02d:%02d:%02d', CAST(DIV(slowest_s, 3600) AS INT64), CAST(DIV(MOD(slowest_s, 3600), 60) AS INT64), CAST(MOD(slowest_s, 60) AS INT64))
-          ELSE FORMAT('%02d:%02d', CAST(DIV(slowest_s, 60) AS INT64), CAST(MOD(slowest_s, 60) AS INT64))
-        END as slowest_time,
-        CASE
-          WHEN mean_s >= 3600 THEN FORMAT('%02d:%02d:%02d', CAST(DIV(CAST(ROUND(mean_s) AS INT64), 3600) AS INT64), CAST(DIV(MOD(CAST(ROUND(mean_s) AS INT64), 3600), 60) AS INT64), CAST(MOD(CAST(ROUND(mean_s) AS INT64), 60) AS INT64))
-          ELSE FORMAT('%02d:%02d', CAST(DIV(CAST(ROUND(mean_s) AS INT64), 60) AS INT64), CAST(MOD(CAST(ROUND(mean_s) AS INT64), 60) AS INT64))
-        END as mean_time
-     FROM RunMetrics 
-     WHERE run_id = (SELECT MAX(run_id) FROM LatestRuns)) as latest,
-    (SELECT AS STRUCT * FROM RunMetrics WHERE run_id = (SELECT MIN(run_id) FROM LatestRuns)) as previous,
-    ARRAY(SELECT AS STRUCT * FROM FirstFinishers WHERE rn = 1 ORDER BY finish_position ASC) as first_finishers,
-    ARRAY(SELECT AS STRUCT * FROM Distribution ORDER BY minute_bucket ASC) as distribution,
-    ARRAY(SELECT AS STRUCT * FROM TopAgeGrades) as top_age_grades,
-    ARRAY(SELECT AS STRUCT * FROM Visitors) as visitors,
-    (SELECT prev_id FROM CurrentRun) as prev_run_id,
-    (SELECT next_id FROM CurrentRun) as next_run_id
+      event_date,
+      finishers,
+      first_timers,
+      new_parkrunners,
+      pbs,
+      unknowns,
+      volunteers,
+      fastest_s,
+      slowest_s,
+      mean_s,
+      fastest_time,
+      slowest_time,
+      mean_time
+    ) AS latest,
+    STRUCT(
+      previous_finishers AS finishers,
+      previous_first_timers AS first_timers,
+      previous_new_parkrunners AS new_parkrunners,
+      previous_pbs AS pbs,
+      previous_unknowns AS unknowns,
+      previous_volunteers AS volunteers,
+      previous_fastest_s AS fastest_s,
+      previous_slowest_s AS slowest_s,
+      previous_mean_s AS mean_s
+    ) AS previous,
+    first_finishers,
+    distribution,
+    top_age_grades,
+    visitors,
+    prev_run_id,
+    next_run_id
+  FROM \`${projectId}.${viewsDatasetId}._26_dashboard_run_report\`
+  WHERE (@targetRunId = -1 AND run_id = (
+      SELECT MAX(run_id)
+      FROM \`${projectId}.${viewsDatasetId}._26_dashboard_run_report\`
+    ))
+    OR run_id = @targetRunId
 `;
 
-let data = null;
+let data: any = null;
 try {
   const results = await runQuery(reportQuery, { targetRunId });
   data = results[0];
@@ -172,7 +73,7 @@ const topAgeGrades = data?.top_age_grades || [];
 const visitors = data?.visitors || [];
 
 // Weather Fetching Logic (Open-Meteo)
-let weather = null;
+let weather: { temp: number; code: number; wind: number } | null = null;
 const wDate =
   latest.event_date instanceof Date
     ? latest.event_date
@@ -218,10 +119,13 @@ const weatherCodes = {
   82: { label: 'Heavy Showers', icon: '⛈️' },
 };
 const weatherInfo = weather
-  ? weatherCodes[weather.code] || { label: 'Unknown', icon: '🌡️' }
+  ? weatherCodes[weather.code as keyof typeof weatherCodes] || {
+      label: 'Unknown',
+      icon: '🌡️',
+    }
   : null;
 
-const getTrend = (curr, old) => {
+const getTrend = (curr: any, old: any) => {
   if (old === undefined || old === null)
     return { val: 0, icon: '−', color: 'neutral' };
   const diff = curr - old;
@@ -230,7 +134,7 @@ const getTrend = (curr, old) => {
   return { val: 0, icon: '−', color: 'neutral' };
 };
 
-const getTimeTrend = (curr, old) => {
+const getTimeTrend = (curr: any, old: any) => {
   if (curr === null || curr === undefined || old === null || old === undefined)
     return { val: '−', icon: '', color: 'neutral' };
   const diff = curr - old;
@@ -257,8 +161,8 @@ const trends = {
   slowest: getTimeTrend(latest.slowest_s, prev.slowest_s),
 };
 
-const chartLabels = dist.map(d => `${d.minute_bucket}:00`);
-const chartData = dist.map(d => d.count);
+const chartLabels = dist.map((d: any) => `${d.minute_bucket}:00`);
+const chartData = dist.map((d: any) => d.count);
 ---
 
 <div class="report-container">
@@ -362,7 +266,7 @@ const chartData = dist.map(d => d.count);
       <h3 class="card-title">First Finishers</h3>
       <div class="first-finishers-list">
         {
-          firsts.map(f => (
+          firsts.map((f: any) => (
             <div class="ff-item">
               <div class="ff-meta">
                 <span class="ff-gender">{f.gender}</span>
@@ -448,7 +352,7 @@ const chartData = dist.map(d => d.count);
       <h3 class="card-title">Highest Age Grades</h3>
       <div class="age-grade-grid">
         {
-          topAgeGrades.map(ag => (
+          topAgeGrades.map((ag: any) => (
             <div class="ag-item">
               <div class="ag-info">
                 <span class="ag-name">
@@ -484,7 +388,7 @@ const chartData = dist.map(d => d.count);
         {
           visitors.length > 0 ? (
             <div class="visitors-tags">
-              {visitors.map(v => (
+              {visitors.map((v: any) => (
                 <div class="v-tag">
                   <span class="v-name">{v.home_run_name}</span>
                   <span class="v-count">{v.count}</span>
