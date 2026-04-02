@@ -15,6 +15,11 @@ Each Astro dashboard component queries a corresponding view to keep complex SQL 
 - 27_dashboard_top_lists.sql: Nested top-list datasets matching the TopLists dashboard component.
 - 28_dashboard_volunteer_tracker.sql: Volunteer credits, roles, and finisher totals by event.
 
+Time-format normalization notes:
+
+- `26_dashboard_run_report.sql` and `27_dashboard_top_lists.sql` now format reused time strings once in dedicated CTEs, then project those fields in final arrays/results.
+- This keeps output unchanged while reducing duplicated CASE/FORMAT logic in final SELECT blocks.
+
 Publish all SQL files in this folder as BigQuery views:
 
 `npm run publish:views`

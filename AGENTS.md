@@ -49,5 +49,6 @@ When changing behavior, update docs in the same change set when relevant:
 ## Project Conventions
 
 - Keep SQL logic in views and keep Astro components focused on rendering/filtering.
+- For dashboard UI date display, use `dd-mm-yyyy` format (for example `toLocaleDateString('en-GB').split('/').join('-')`).
 - Preserve existing behavior unless user requests functional change.
 - Keep changes minimal and targeted.

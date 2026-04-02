@@ -85,6 +85,26 @@ volunteer_run_stats AS (
   WHERE is_unknown_athlete = FALSE
   GROUP BY athlete_id
 ),
+volunteer_run_stats_formatted AS (
+  SELECT
+    athlete_id,
+    total_runs,
+    CASE
+      WHEN fastest_s IS NULL THEN NULL
+      WHEN fastest_s >= 3600 THEN FORMAT(
+        '%02d:%02d:%02d',
+        CAST(DIV(fastest_s, 3600) AS INT64),
+        CAST(DIV(MOD(fastest_s, 3600), 60) AS INT64),
+        CAST(MOD(fastest_s, 60) AS INT64)
+      )
+      ELSE FORMAT(
+        '%02d:%02d',
+        CAST(DIV(fastest_s, 60) AS INT64),
+        CAST(MOD(fastest_s, 60) AS INT64)
+      )
+    END AS fastest_time
+  FROM volunteer_run_stats
+),
 event_aggs AS (
   SELECT
     run_id,
@@ -96,6 +116,55 @@ event_aggs AS (
   FROM parsed_results
   WHERE finish_seconds IS NOT NULL
   GROUP BY run_id, event_date
+),
+event_aggs_formatted AS (
+  SELECT
+    run_id,
+    event_date,
+    value,
+    CASE
+      WHEN fastest_s IS NULL THEN NULL
+      WHEN fastest_s >= 3600 THEN FORMAT(
+        '%02d:%02d:%02d',
+        CAST(DIV(fastest_s, 3600) AS INT64),
+        CAST(DIV(MOD(fastest_s, 3600), 60) AS INT64),
+        CAST(MOD(fastest_s, 60) AS INT64)
+      )
+      ELSE FORMAT(
+        '%02d:%02d',
+        CAST(DIV(fastest_s, 60) AS INT64),
+        CAST(MOD(fastest_s, 60) AS INT64)
+      )
+    END AS fastest_time,
+    CASE
+      WHEN mean_s IS NULL THEN NULL
+      WHEN CAST(ROUND(mean_s) AS INT64) >= 3600 THEN FORMAT(
+        '%02d:%02d:%02d',
+        CAST(DIV(CAST(ROUND(mean_s) AS INT64), 3600) AS INT64),
+        CAST(DIV(MOD(CAST(ROUND(mean_s) AS INT64), 3600), 60) AS INT64),
+        CAST(MOD(CAST(ROUND(mean_s) AS INT64), 60) AS INT64)
+      )
+      ELSE FORMAT(
+        '%02d:%02d',
+        CAST(DIV(CAST(ROUND(mean_s) AS INT64), 60) AS INT64),
+        CAST(MOD(CAST(ROUND(mean_s) AS INT64), 60) AS INT64)
+      )
+    END AS mean_time,
+    CASE
+      WHEN slowest_s IS NULL THEN NULL
+      WHEN slowest_s >= 3600 THEN FORMAT(
+        '%02d:%02d:%02d',
+        CAST(DIV(slowest_s, 3600) AS INT64),
+        CAST(DIV(MOD(slowest_s, 3600), 60) AS INT64),
+        CAST(MOD(slowest_s, 60) AS INT64)
+      )
+      ELSE FORMAT(
+        '%02d:%02d',
+        CAST(DIV(slowest_s, 60) AS INT64),
+        CAST(MOD(slowest_s, 60) AS INT64)
+      )
+    END AS slowest_time
+  FROM event_aggs
 ),
 club_base AS (
   SELECT
@@ -131,22 +200,9 @@ SELECT
       vb.vol_name AS label,
       vb.appearances AS value,
       vrs.total_runs AS run_count,
-      CASE
-        WHEN vrs.fastest_s IS NULL THEN NULL
-        WHEN vrs.fastest_s >= 3600 THEN FORMAT(
-          '%02d:%02d:%02d',
-          CAST(DIV(vrs.fastest_s, 3600) AS INT64),
-          CAST(DIV(MOD(vrs.fastest_s, 3600), 60) AS INT64),
-          CAST(MOD(vrs.fastest_s, 60) AS INT64)
-        )
-        ELSE FORMAT(
-          '%02d:%02d',
-          CAST(DIV(vrs.fastest_s, 60) AS INT64),
-          CAST(MOD(vrs.fastest_s, 60) AS INT64)
-        )
-      END AS fastest_time
+      vrs.fastest_time
     FROM volunteer_base vb
-    LEFT JOIN volunteer_run_stats vrs
+    LEFT JOIN volunteer_run_stats_formatted vrs
       ON vb.athlete_id = vrs.athlete_id
     ORDER BY value DESC, label ASC
     LIMIT 20
@@ -156,37 +212,10 @@ SELECT
       CAST(ea.event_date AS STRING) AS label,
       ea.value,
       ea.run_id,
-      CASE
-        WHEN ea.fastest_s IS NULL THEN NULL
-        WHEN ea.fastest_s >= 3600 THEN FORMAT(
-          '%02d:%02d:%02d',
-          CAST(DIV(ea.fastest_s, 3600) AS INT64),
-          CAST(DIV(MOD(ea.fastest_s, 3600), 60) AS INT64),
-          CAST(MOD(ea.fastest_s, 60) AS INT64)
-        )
-        ELSE FORMAT('%02d:%02d', CAST(DIV(ea.fastest_s, 60) AS INT64), CAST(MOD(ea.fastest_s, 60) AS INT64))
-      END AS fastest_time,
-      CASE
-        WHEN ea.mean_s IS NULL THEN NULL
-        WHEN ea.mean_s >= 3600 THEN FORMAT(
-          '%02d:%02d:%02d',
-          CAST(DIV(CAST(ROUND(ea.mean_s) AS INT64), 3600) AS INT64),
-          CAST(DIV(MOD(CAST(ROUND(ea.mean_s) AS INT64), 3600), 60) AS INT64),
-          CAST(MOD(CAST(ROUND(ea.mean_s) AS INT64), 60) AS INT64)
-        )
-        ELSE FORMAT('%02d:%02d', CAST(DIV(CAST(ROUND(ea.mean_s) AS INT64), 60) AS INT64), CAST(MOD(CAST(ROUND(ea.mean_s) AS INT64), 60) AS INT64))
-      END AS mean_time,
-      CASE
-        WHEN ea.slowest_s IS NULL THEN NULL
-        WHEN ea.slowest_s >= 3600 THEN FORMAT(
-          '%02d:%02d:%02d',
-          CAST(DIV(ea.slowest_s, 3600) AS INT64),
-          CAST(DIV(MOD(ea.slowest_s, 3600), 60) AS INT64),
-          CAST(MOD(ea.slowest_s, 60) AS INT64)
-        )
-        ELSE FORMAT('%02d:%02d', CAST(DIV(ea.slowest_s, 60) AS INT64), CAST(MOD(ea.slowest_s, 60) AS INT64))
-      END AS slowest_time
-    FROM event_aggs ea
+      ea.fastest_time,
+      ea.mean_time,
+      ea.slowest_time
+    FROM event_aggs_formatted ea
     ORDER BY ea.value DESC, ea.run_id DESC
     LIMIT 20
   ) AS events,

@@ -47,6 +47,11 @@ Athlete names are personally identifiable information (PII). This dashboard foll
 2. Data is fetched on the server; the client only receives rendered HTML.
 3. Key normalization ensures that BigQuery's case-sensitive column names are handled gracefully in JavaScript.
 
+## Display Conventions
+
+- Dates shown in dashboard UI should use `dd-mm-yyyy` format for consistency across pages.
+- If using `toLocaleDateString('en-GB')`, normalize separators to hyphens with `.split('/').join('-')`.
+
 ## 🧞 Commands
 
 All commands are run from the `dashboard/` folder:

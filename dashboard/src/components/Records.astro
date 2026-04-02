@@ -141,9 +141,19 @@ const sections = [
                           : '-'}
                       </td>
                       <td class="date-cell">
-                        {row.pb_date instanceof Date
-                          ? row.pb_date.toLocaleDateString('en-GB')
-                          : row.pb_date?.value || row.pb_date || '-'}
+                        {(() => {
+                          const raw = row.pb_date?.value || row.pb_date;
+                          if (!raw) return '-';
+                          const date =
+                            row.pb_date instanceof Date
+                              ? row.pb_date
+                              : new Date(raw);
+                          if (isNaN(date.getTime())) return '-';
+                          return date
+                            .toLocaleDateString('en-GB')
+                            .split('/')
+                            .join('-');
+                        })()}
                         {row.run_id && (
                           <span class="run-id-tag"> (#{row.run_id})</span>
                         )}

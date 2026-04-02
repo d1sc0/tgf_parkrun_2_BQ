@@ -73,6 +73,60 @@ run_metrics AS (
     ON p.run_id = v.run_id
   GROUP BY p.run_id
 ),
+run_metrics_formatted AS (
+  SELECT
+    run_id,
+    event_date,
+    finishers,
+    first_timers,
+    new_parkrunners,
+    pbs,
+    unknowns,
+    volunteers,
+    fastest_s,
+    slowest_s,
+    mean_s,
+    CASE
+      WHEN fastest_s >= 3600 THEN FORMAT(
+        '%02d:%02d:%02d',
+        CAST(DIV(fastest_s, 3600) AS INT64),
+        CAST(DIV(MOD(fastest_s, 3600), 60) AS INT64),
+        CAST(MOD(fastest_s, 60) AS INT64)
+      )
+      ELSE FORMAT(
+        '%02d:%02d',
+        CAST(DIV(fastest_s, 60) AS INT64),
+        CAST(MOD(fastest_s, 60) AS INT64)
+      )
+    END AS fastest_time,
+    CASE
+      WHEN slowest_s >= 3600 THEN FORMAT(
+        '%02d:%02d:%02d',
+        CAST(DIV(slowest_s, 3600) AS INT64),
+        CAST(DIV(MOD(slowest_s, 3600), 60) AS INT64),
+        CAST(MOD(slowest_s, 60) AS INT64)
+      )
+      ELSE FORMAT(
+        '%02d:%02d',
+        CAST(DIV(slowest_s, 60) AS INT64),
+        CAST(MOD(slowest_s, 60) AS INT64)
+      )
+    END AS slowest_time,
+    CASE
+      WHEN mean_s >= 3600 THEN FORMAT(
+        '%02d:%02d:%02d',
+        CAST(DIV(CAST(ROUND(mean_s) AS INT64), 3600) AS INT64),
+        CAST(DIV(MOD(CAST(ROUND(mean_s) AS INT64), 3600), 60) AS INT64),
+        CAST(MOD(CAST(ROUND(mean_s) AS INT64), 60) AS INT64)
+      )
+      ELSE FORMAT(
+        '%02d:%02d',
+        CAST(DIV(CAST(ROUND(mean_s) AS INT64), 60) AS INT64),
+        CAST(MOD(CAST(ROUND(mean_s) AS INT64), 60) AS INT64)
+      )
+    END AS mean_time
+  FROM run_metrics
+),
 first_finishers_ranked AS (
   SELECT
     run_id,
@@ -192,45 +246,9 @@ SELECT
   m.fastest_s,
   m.slowest_s,
   m.mean_s,
-  CASE
-    WHEN m.fastest_s >= 3600 THEN FORMAT(
-      '%02d:%02d:%02d',
-      CAST(DIV(m.fastest_s, 3600) AS INT64),
-      CAST(DIV(MOD(m.fastest_s, 3600), 60) AS INT64),
-      CAST(MOD(m.fastest_s, 60) AS INT64)
-    )
-    ELSE FORMAT(
-      '%02d:%02d',
-      CAST(DIV(m.fastest_s, 60) AS INT64),
-      CAST(MOD(m.fastest_s, 60) AS INT64)
-    )
-  END AS fastest_time,
-  CASE
-    WHEN m.slowest_s >= 3600 THEN FORMAT(
-      '%02d:%02d:%02d',
-      CAST(DIV(m.slowest_s, 3600) AS INT64),
-      CAST(DIV(MOD(m.slowest_s, 3600), 60) AS INT64),
-      CAST(MOD(m.slowest_s, 60) AS INT64)
-    )
-    ELSE FORMAT(
-      '%02d:%02d',
-      CAST(DIV(m.slowest_s, 60) AS INT64),
-      CAST(MOD(m.slowest_s, 60) AS INT64)
-    )
-  END AS slowest_time,
-  CASE
-    WHEN m.mean_s >= 3600 THEN FORMAT(
-      '%02d:%02d:%02d',
-      CAST(DIV(CAST(ROUND(m.mean_s) AS INT64), 3600) AS INT64),
-      CAST(DIV(MOD(CAST(ROUND(m.mean_s) AS INT64), 3600), 60) AS INT64),
-      CAST(MOD(CAST(ROUND(m.mean_s) AS INT64), 60) AS INT64)
-    )
-    ELSE FORMAT(
-      '%02d:%02d',
-      CAST(DIV(CAST(ROUND(m.mean_s) AS INT64), 60) AS INT64),
-      CAST(MOD(CAST(ROUND(m.mean_s) AS INT64), 60) AS INT64)
-    )
-  END AS mean_time,
+  m.fastest_time,
+  m.slowest_time,
+  m.mean_time,
   prev.finishers AS previous_finishers,
   prev.first_timers AS previous_first_timers,
   prev.new_parkrunners AS previous_new_parkrunners,
@@ -245,9 +263,9 @@ SELECT
   IFNULL(tag.top_age_grades, []) AS top_age_grades,
   IFNULL(v.visitors, []) AS visitors
 FROM ordered_runs o
-LEFT JOIN run_metrics m
+LEFT JOIN run_metrics_formatted m
   ON o.run_id = m.run_id
-LEFT JOIN run_metrics prev
+LEFT JOIN run_metrics_formatted prev
   ON o.prev_run_id = prev.run_id
 LEFT JOIN first_finishers_array ff
   ON o.run_id = ff.run_id

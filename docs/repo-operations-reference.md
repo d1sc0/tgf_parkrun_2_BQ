@@ -171,6 +171,7 @@ Text report sections:
 
 - Prefer run-scoped backfills for isolated missing rows.
 - Re-run utilities/compare-bq-vs-eventhistory.js after data corrections.
+- Dashboard date display convention is `dd-mm-yyyy`.
 - For scripted or agent-driven terminal runs, prefix commands with DISABLE_AUTO_UPDATE=true to prevent interactive oh-my-zsh update prompts.
 - Keep temporary probe/debug scripts out of long-term repo state.
 - Update this document when file responsibilities or endpoint usage changes.
